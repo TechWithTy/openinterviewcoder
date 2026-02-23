@@ -18,6 +18,9 @@ const {
 const { initializeLLMService } = require("./llm-service");
 const config = require("./config");
 
+const isDev = process.argv.includes("--debug") || process.argv.includes("--inspect");
+
+
 // IPC handlers for settings
 ipcMain.handle("get-settings", () => {
   return {
@@ -97,30 +100,31 @@ let tray = null;
 // Create shared menu template
 function createMenuTemplate() {
   return [
-    ...(process.platform === "darwin"
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: "about" },
-              { type: "separator" },
-              {
-                label: "Preferences...",
-                accelerator: "Command+,",
-                click: () => createSettingsWindow(),
-              },
-              { type: "separator" },
+    {
+      label: process.platform === "darwin" ? app.name : "File",
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        {
+          label: process.platform === "darwin" ? "Preferences..." : "Settings...",
+          accelerator: "CommandOrControl+,",
+          click: () => createSettingsWindow(),
+        },
+        { type: "separator" },
+        ...(process.platform === "darwin"
+          ? [
               { role: "services" },
               { type: "separator" },
               { role: "hide" },
               { role: "hideOthers" },
               { role: "unhide" },
               { type: "separator" },
-              { role: "quit" },
-            ],
-          },
-        ]
-      : []),
+            ]
+          : []),
+        { role: "quit" },
+      ],
+    },
+
     {
       label: "Edit",
       submenu: [
@@ -184,15 +188,10 @@ function createInvisibleWindow() {
 
   invisibleWindow.loadFile("index.html");
 
-  // Open DevTools in development
-  if (process.argv.includes("--debug")) {
-    invisibleWindow.webContents.openDevTools();
-  }
+  // DevTools can be toggled manually with shortcuts defined in createMenuTemplate
 
-  // Handle window visibility
-  invisibleWindow.on("show", () => {
-    invisibleWindow.showInactive();
-  });
+
+
 
   // Prevent the window from being closed with mouse
   invisibleWindow.on("close", (event) => {
@@ -232,10 +231,8 @@ function createSettingsWindow() {
 
   settingsWindow.loadFile("settings.html");
 
-  // Open DevTools in development
-  if (process.argv.includes("--debug")) {
-    settingsWindow.webContents.openDevTools();
-  }
+  // DevTools can be toggled manually
+
 
   settingsWindow.once("ready-to-show", () => {
     settingsWindow.show();
@@ -253,8 +250,8 @@ function createSettingsWindow() {
 
 // Register global shortcuts
 function registerShortcuts() {
-  // Screenshot shortcut (Command/Ctrl + H)
-  globalShortcut.register("CommandOrControl+H", async () => {
+  // Screenshot shortcut (Command/Ctrl + Shift + S)
+  globalShortcut.register("CommandOrControl+Shift+S", async () => {
     try {
       // Hide window before taking screenshot
       if (invisibleWindow && invisibleWindow.isVisible()) {
@@ -297,8 +294,8 @@ function registerShortcuts() {
     }
   });
 
-  // Toggle visibility shortcut (Command/Ctrl + B)
-  globalShortcut.register("CommandOrControl+B", () => {
+  // Toggle visibility shortcut (Command/Ctrl + Shift + H)
+  globalShortcut.register("CommandOrControl+Shift+H", () => {
     if (invisibleWindow.isVisible()) {
       invisibleWindow.hide();
     } else {
@@ -385,6 +382,12 @@ function registerShortcuts() {
       invisibleWindow.webContents.send("reset-chat");
     }
   });
+
+  // Settings shortcut (Command/Ctrl + ,)
+  globalShortcut.register("CommandOrControl+,", () => {
+    createSettingsWindow();
+  });
+
 
   // Chat scrolling shortcuts
   globalShortcut.register("Alt+Up", () => {
