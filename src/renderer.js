@@ -36,20 +36,37 @@ function setupEventListeners() {
   // Handle chat reset
   window.electronAPI.onResetChat(resetChat);
 
+  // Handle dark mode toggle
+  window.electronAPI.onToggleDarkMode(() => {
+    document.body.classList.toggle("dark-mode");
+  });
+
   // Handle response updates
   window.electronAPI.onStreamUpdate(updateMessage);
 
-  // Handle chat scrolling
+  // Handle chat scrolling from shortcuts
   window.electronAPI.onScrollChat((direction) => {
     const chatContainer = document.querySelector(".chat-container");
     if (chatContainer) {
       if (direction === "up") {
-        chatContainer.scrollTop -= 100; // Scroll up by 100px
+        chatContainer.scrollTop -= 300; // Scroll up by 300px
       } else if (direction === "down") {
-        chatContainer.scrollTop += 100; // Scroll down by 100px
+        chatContainer.scrollTop += 300; // Scroll down by 300px
       }
     }
   });
+
+  // Handle fast scrolling with mouse wheel and Alt key
+  window.addEventListener('wheel', (event) => {
+    if (event.altKey) {
+      // Prevent default to prevent double scrolling side-effects
+      event.preventDefault();
+      const chatContainer = document.querySelector(".chat-container");
+      if (chatContainer) {
+        chatContainer.scrollTop += event.deltaY * 5; // Scroll faster
+      }
+    }
+  }, { passive: false });
 }
 
 // Handle keyboard shortcuts

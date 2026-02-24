@@ -73,7 +73,7 @@ function validateConfig() {
 
 async function makeLLMRequest(event, data) {
   const apiKey = config.getOpenAIKey();
-  const prompt = data.prompt || "Analyze this screenshot and provide insights.";
+  const prompt = data.prompt || config.getPrompt();
   
   const messages = [
     {
@@ -103,7 +103,7 @@ async function makeLLMRequest(event, data) {
   }
 
   const requestData = {
-    model: "gpt-4o-mini",
+    model: config.getModel() || "gpt-4o-mini",
     messages: messages,
     max_tokens: 1000
   };
@@ -148,6 +148,10 @@ async function makeLLMRequest(event, data) {
         throw new Error(
           "Invalid API key. Please check your OpenAI API key in settings."
         );
+      } else if (error.response.status === 429) {
+        throw new Error(
+          "You exceeded your current data quota. Please check your OpenAI plan and billing details to add credits."
+        );
       }
       throw new Error(
         `API Error: ${error.response.data.error?.message || error.message}`
@@ -164,3 +168,4 @@ async function makeLLMRequest(event, data) {
 module.exports = {
   initializeLLMService,
 };
+

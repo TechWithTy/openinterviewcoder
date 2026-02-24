@@ -54,7 +54,32 @@
         width: 100%;
         box-sizing: border-box;
       }
-      input[type="text"]:focus {
+      input[type="text"]:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #007aff;
+      }
+      textarea {
+        padding: 8px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        font-size: 14px;
+        width: 100%;
+        box-sizing: border-box;
+        font-family: inherit;
+        resize: vertical;
+      }
+      select {
+        padding: 8px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        font-size: 14px;
+        width: 100%;
+        box-sizing: border-box;
+        background-color: white;
+        margin-bottom: 10px;
+      }
+      select:focus {
         outline: none;
         border-color: #007aff;
       }
@@ -97,6 +122,61 @@
             <div class="api-key-description">
               Your API key is stored locally and never sent to any server except
               OpenAI's API.
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">AI Model</label>
+          <div class="setting-control">
+            <select id="modelSelect">
+              <optgroup label="Tier 1 (250k tokens/day)">
+                <option value="gpt-5.2">gpt-5.2</option>
+                <option value="gpt-5.1">gpt-5.1</option>
+                <option value="gpt-5.1-codex">gpt-5.1-codex</option>
+                <option value="gpt-5">gpt-5</option>
+                <option value="gpt-5-codex">gpt-5-codex</option>
+                <option value="gpt-5-chat-latest">gpt-5-chat-latest</option>
+                <option value="gpt-4.1">gpt-4.1</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="o1">o1</option>
+                <option value="o3">o3</option>
+              </optgroup>
+              <optgroup label="Tier 2 (2.5M tokens/day)">
+                <option value="gpt-5.1-codex-mini">gpt-5.1-codex-mini</option>
+                <option value="gpt-5-mini">gpt-5-mini</option>
+                <option value="gpt-5-nano">gpt-5-nano</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                <option value="gpt-4.1-nano">gpt-4.1-nano</option>
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                <option value="o1-mini">o1-mini</option>
+                <option value="o3-mini">o3-mini</option>
+                <option value="o4-mini">o4-mini</option>
+                <option value="codex-mini-latest">codex-mini-latest</option>
+              </optgroup>
+            </select>
+            <div class="api-key-description">
+              Select the OpenAI model to use for analysis. Make sure your API key has access to the selected model.
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">Analysis Prompt</label>
+          <div class="setting-control">
+            <select id="predefinedPrompts">
+              <option value="custom">Custom Prompt</option>
+              <option value="default">Default: General Insights</option>
+              <option value="hackerrank">HackerRank: Coding Interview (Analyze Left Side)</option>
+              <option value="debug">Code Review: Finding Bugs</option>
+            </select>
+            <textarea
+              id="analysisPrompt"
+              placeholder="Analyze this screenshot and provide insights."
+              rows="3"
+            ></textarea>
+            <div class="api-key-description">
+              Custom instructions to guide the AI's analysis for screenshots.
             </div>
           </div>
         </div>

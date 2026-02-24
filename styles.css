@@ -29,6 +29,13 @@ html {
   margin: 0 auto;
   pointer-events: none;
   border-radius: 12px;
+  transition: background-color 0.3s ease;
+}
+
+body.dark-mode #invisible-container {
+  background-color: rgba(15, 15, 15, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 /* Chat container */
@@ -72,6 +79,14 @@ html {
   background: rgba(255, 255, 255, 0.03);
   margin-right: auto;
   color: rgba(255, 255, 255, 0.9);
+}
+
+body.dark-mode .message.user {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .message.assistant {
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .message.error {

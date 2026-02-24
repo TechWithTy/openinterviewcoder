@@ -53,6 +53,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Click-through mode
   onToggleMouseIgnore: (callback) =>
     ipcRenderer.on("toggle-mouse-ignore", (event, value) => callback(value)),
+
+  // Dark mode
+  onToggleDarkMode: (callback) =>
+    ipcRenderer.on("toggle-dark-mode", (event) => callback()),
 });
 
 // No need for additional electron context bridge since we're handling everything through electronAPI
