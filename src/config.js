@@ -18,4 +18,6 @@ module.exports = {
   setPrompt: (prompt) => store.set("openai.prompt", prompt),
   getModel: () => store.get("openai.model") || "gpt-4o-mini",
   setModel: (model) => store.set("openai.model", model),
+  getTwoStep: () => store.get("openai.twoStep") || false,
+  setTwoStep: (twoStep) => store.set("openai.twoStep", twoStep),
 };

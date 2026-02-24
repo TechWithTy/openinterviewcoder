@@ -1,14 +1,14 @@
 // Settings management
 document.addEventListener("DOMContentLoaded", async () => {
-  // Get all form elements
   const openaiKeyInput = document.getElementById("openaiKey");
   const promptInput = document.getElementById("analysisPrompt");
   const modelSelect = document.getElementById("modelSelect");
   const saveButton = document.getElementById("saveButton");
   const predefinedPromptsSelect = document.getElementById("predefinedPrompts");
+  const twoStepCheck = document.getElementById("twoStepCheck");
 
   // Verify all elements exist
-  if (!openaiKeyInput || !saveButton || !promptInput || !predefinedPromptsSelect || !modelSelect) {
+  if (!openaiKeyInput || !saveButton || !promptInput || !predefinedPromptsSelect || !modelSelect || !twoStepCheck) {
     console.error("Required DOM elements not found");
     return;
   }
@@ -22,8 +22,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     Analyze the coding interview problem (typically on the left side of the screenshot). Produce a production-grade, optimal solution in Python.
     <steps>
       <step>State the core problem and constraints.</step>
-      <step>Determine the optimal algorithm (optimize for Big-O time/space complexity).</step>
-      <step>Write clean, robust, and commented code in Python to solve it.</step>
+      <step>Determine the optimal algorithm (optimize for the best possible Big-O Time and Space complexity).</step>
+      <step>Write clean, robust, and commented code in Python to solve it. Ensure you handle all edge cases and test cases.</step>
       <step>Explicitly state the Time and Space Complexity (Big-O).</step>
       <step>Suggest potential follow-up questions and briefly answer them.</step>
     </steps>
@@ -70,6 +70,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (settings && settings.model) {
       modelSelect.value = settings.model;
     }
+    if (settings && settings.twoStep !== undefined) {
+      twoStepCheck.checked = settings.twoStep;
+    }
   } catch (error) {
     console.error("Error loading settings:", error);
   }
@@ -80,6 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       openaiKey: openaiKeyInput.value.trim(),
       prompt: promptInput.value.trim(),
       model: modelSelect.value,
+      twoStep: twoStepCheck.checked,
     };
 
     try {

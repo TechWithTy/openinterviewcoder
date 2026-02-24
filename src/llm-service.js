@@ -74,40 +74,132 @@ function validateConfig() {
 async function makeLLMRequest(event, data) {
   const apiKey = config.getOpenAIKey();
   const prompt = data.prompt || config.getPrompt();
-  
-  const messages = [
-    {
-      role: "system",
-      content: SYSTEM_PROMPT
-    },
-    {
-      role: "user",
-      content: [
-        { type: "text", text: prompt }
-      ]
-    }
-  ];
+  let selectedModel = config.getModel() || "gpt-4o-mini";
+  let isOModel = selectedModel.startsWith("o1") || selectedModel.startsWith("o3");
+  const useTwoStep = config.getTwoStep();
 
+  let base64Image = null;
   if (data.filePath) {
     if (!fs.existsSync(data.filePath)) {
       throw new Error("Screenshot file not found");
     }
     const imageBuffer = fs.readFileSync(data.filePath);
-    const base64Image = imageBuffer.toString("base64");
-    messages[1].content.push({
+    base64Image = imageBuffer.toString("base64");
+  }
+
+  let extractedTextContext = "";
+
+  if (base64Image && useTwoStep) {
+    // 1. Two-Step Pipeline: Extraction using a vision model.
+    try {
+      const extractResponse = await axios({
+        method: "post",
+        url: "https://api.openai.com/v1/chat/completions",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        data: {
+          model: "gpt-4o-mini", // fast, cheap vision
+          messages: [
+            {
+              role: "system",
+              content: "You are a specialized OCR and layout extraction assistant. Extract all text and code from this image as accurately as possible, preserving the formatting.",
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Please extract all text and code." },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/png;base64,${base64Image}`
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 2000,
+        },
+      });
+
+      if (extractResponse.data.choices && extractResponse.data.choices.length > 0) {
+        extractedTextContext = "\\n\\n--- Extracted Text from Image ---\\n" + extractResponse.data.choices[0].message.content;
+      }
+    } catch (e) {
+      console.warn("Vision extraction step failed, falling back.", e.message);
+    }
+  }
+
+  let messages = [];
+
+  const finalPrompt = prompt + extractedTextContext;
+
+  if (isOModel) {
+    messages.push({
+      role: "user",
+      content: [
+        { type: "text", text: SYSTEM_PROMPT + "\n\n" + finalPrompt }
+      ]
+    });
+  } else {
+    messages.push({
+      role: "system",
+      content: SYSTEM_PROMPT
+    });
+    messages.push({
+      role: "user",
+      content: [
+        { type: "text", text: finalPrompt }
+      ]
+    });
+  }
+
+  if (base64Image && !useTwoStep) {
+    // If we're not using two-step, but an image is provided:
+    messages[messages.length - 1].content.push({
       type: "image_url",
       image_url: {
         url: `data:image/png;base64,${base64Image}`
       }
     });
+
+    if (isOModel) {
+      console.warn(`Vision is not supported on ${selectedModel}. Falling back to gpt-4o.`);
+      selectedModel = "gpt-4o";
+      isOModel = false;
+      
+      messages = [
+        {
+          role: "system",
+          content: SYSTEM_PROMPT
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${base64Image}`
+              }
+            }
+          ]
+        }
+      ];
+    }
   }
 
   const requestData = {
-    model: config.getModel() || "gpt-4o-mini",
+    model: selectedModel,
     messages: messages,
-    max_tokens: 1000
   };
 
+  if (isOModel) {
+    requestData.max_completion_tokens = 4000;
+  } else {
+    requestData.max_tokens = 1000;
+  }
   try {
     const response = await axios({
       method: "post",

@@ -162,6 +162,14 @@
         </div>
 
         <div class="setting-item">
+          <label class="setting-label">Two-Step Vision Pipeline</label>
+          <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="twoStepCheck" style="width: auto;" />
+            <span style="color: #cbd5e1; font-size: 14px;">Use gpt-4o-mini to extract text first, then pass text to target model (Required for o1/o3-mini).</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
           <label class="setting-label">Analysis Prompt</label>
           <div class="setting-control">
             <select id="predefinedPrompts">

@@ -21,10 +21,51 @@ const config = require("./config");
 const isDev = process.argv.includes("--debug") || process.argv.includes("--inspect");
 
 
+const PREDEFINED_PROMPTS = {
+  "default": "Analyze this screenshot and provide insights.",
+  "hackerrank": `<poml version="3.0">
+  <role>Expert SWE</role>
+  <task>
+    Analyze the coding interview problem (typically on the left side of the screenshot). Produce a production-grade, optimal solution in Python.
+    <steps>
+      <step>State the core problem and constraints.</step>
+      <step>Determine the optimal algorithm (optimize for the best possible Big-O Time and Space complexity).</step>
+      <step>Write clean, robust, and commented code in Python to solve it. Ensure you handle all edge cases and test cases.</step>
+      <step>Explicitly state the Time and Space Complexity (Big-O).</step>
+      <step>Suggest potential follow-up questions and briefly answer them.</step>
+    </steps>
+  </task>
+</poml>`,
+  "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations."
+};
+
+const hasDarkModeFlag = process.argv.includes("--dark-mode");
+const hasTwoStepFlag = process.argv.includes("--two-step");
+if (hasTwoStepFlag) {
+  config.setTwoStep(true);
+}
+
+process.argv.forEach((arg) => {
+  if (arg.startsWith("--model=")) {
+    const model = arg.split("=")[1];
+    config.setModel(model);
+  } else if (arg.startsWith("--prompt-template=")) {
+    const templateName = arg.split("=")[1];
+    if (PREDEFINED_PROMPTS[templateName]) {
+      config.setPrompt(PREDEFINED_PROMPTS[templateName]);
+    } else {
+      config.setPrompt(templateName);
+    }
+  }
+});
+
 // IPC handlers for settings
 ipcMain.handle("get-settings", () => {
   return {
     openaiKey: config.getOpenAIKey(),
+    prompt: config.getPrompt(),
+    model: config.getModel(),
+    twoStep: config.getTwoStep(),
   };
 });
 
@@ -37,11 +78,20 @@ ipcMain.handle("scroll-chat", (event, direction) => {
 });
 
 ipcMain.handle("save-settings", async (event, settings) => {
-  if (settings.openaiKey) {
+  if (settings.openaiKey !== undefined) {
     config.setOpenAIKey(settings.openaiKey);
-    // Reinitialize LLM service with new API key
-    await initializeLLMService();
   }
+  if (settings.prompt !== undefined) {
+    config.setPrompt(settings.prompt);
+  }
+  if (settings.model !== undefined) {
+    config.setModel(settings.model);
+  }
+  if (settings.twoStep !== undefined) {
+    config.setTwoStep(settings.twoStep);
+  }
+  // Reinitialize LLM service with new API key
+  await initializeLLMService();
   return true;
 });
 
@@ -187,6 +237,12 @@ function createInvisibleWindow() {
   invisibleWindow.webContents.isIgnoringMouseEvents = true;
 
   invisibleWindow.loadFile("index.html");
+
+  invisibleWindow.webContents.on('did-finish-load', () => {
+    if (hasDarkModeFlag) {
+      invisibleWindow.webContents.send("toggle-dark-mode");
+    }
+  });
 
   // DevTools can be toggled manually with shortcuts defined in createMenuTemplate
 
