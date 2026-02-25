@@ -244,6 +244,10 @@ let settingsWindow = null;
 let tray = null;
 let lastRendererCrashAt = 0;
 let isRecoveringRendererWindow = false;
+// GlobalShortcut does not expose keyup; use repeated keydown events while held
+// and release when that heartbeat stops.
+const HOLD_SHORTCUT_RELEASE_IDLE_MS = 800;
+const recordingHoldStates = new Map();
 
 function showInvisibleWindow(reason) {
   if (invisibleWindow) {
@@ -301,6 +305,144 @@ function recreateInvisibleWindow(reason) {
         isRecoveringRendererWindow = false;
       }, 500);
     }
+  }
+}
+
+function sendRendererEvent(channel, payload) {
+  if (!invisibleWindow || invisibleWindow.isDestroyed()) {
+    return;
+  }
+  invisibleWindow.webContents.send(channel, payload);
+}
+
+function dispatchRecordingToggle(channel, reason) {
+  if (!invisibleWindow || invisibleWindow.isDestroyed()) {
+    return;
+  }
+  if (!invisibleWindow.isVisible()) {
+    showInvisibleWindow(reason);
+  }
+  sendRendererEvent(channel);
+  setTimeout(() => {
+    if (invisibleWindow && !invisibleWindow.isDestroyed() && !invisibleWindow.isVisible()) {
+      showInvisibleWindow(`${reason}-auto-recover`);
+    }
+  }, 300);
+}
+
+function dispatchRecordingHold(phase, token, targets, reason) {
+  if (!invisibleWindow || invisibleWindow.isDestroyed()) {
+    return;
+  }
+  if (!invisibleWindow.isVisible()) {
+    showInvisibleWindow(`${reason}:${phase}`);
+  }
+  sendRendererEvent(`recording-hold-${phase}`, {
+    token,
+    targets,
+    reason,
+    timestamp: Date.now(),
+  });
+}
+
+function releaseRecordingHold(token, reason) {
+  const state = recordingHoldStates.get(token);
+  if (!state || !state.active) {
+    return;
+  }
+  state.active = false;
+  if (state.timer) {
+    clearTimeout(state.timer);
+    state.timer = null;
+  }
+  logEvent("recording", "Hold shortcut stop", {
+    token,
+    targets: state.targets,
+    reason,
+  });
+  dispatchRecordingHold("stop", token, state.targets, reason);
+}
+
+function armHoldReleaseTimer(token) {
+  const state = recordingHoldStates.get(token);
+  if (!state) {
+    return;
+  }
+  if (state.timer) {
+    clearTimeout(state.timer);
+  }
+  state.timer = setTimeout(() => {
+    const latestState = recordingHoldStates.get(token);
+    if (!latestState || !latestState.active) {
+      return;
+    }
+    const idleMs = Date.now() - latestState.lastSeenAt;
+    if (idleMs >= HOLD_SHORTCUT_RELEASE_IDLE_MS) {
+      releaseRecordingHold(token, "idle-timeout");
+      return;
+    }
+    armHoldReleaseTimer(token);
+  }, HOLD_SHORTCUT_RELEASE_IDLE_MS);
+}
+
+function registerRecordingHoldShortcut({
+  name,
+  token,
+  targets,
+  primary,
+  fallback,
+}) {
+  const triggerHold = () => {
+    const state = recordingHoldStates.get(token);
+    if (!state) {
+      return;
+    }
+    state.lastSeenAt = Date.now();
+    if (!state.active) {
+      state.active = true;
+      logEvent("recording", "Hold shortcut start", {
+        name,
+        token,
+        targets,
+      });
+      dispatchRecordingHold("start", token, targets, `shortcut:${token}`);
+    }
+    armHoldReleaseTimer(token);
+  };
+
+  recordingHoldStates.set(token, {
+    name,
+    token,
+    targets,
+    active: false,
+    lastSeenAt: 0,
+    timer: null,
+  });
+
+  const primaryRegistered = globalShortcut.register(primary, triggerHold);
+  if (primaryRegistered) {
+    return;
+  }
+  if (!fallback) {
+    console.warn(`[shortcuts] Could not register hold shortcut ${primary}.`);
+    return;
+  }
+  console.warn(
+    `[shortcuts] Could not register ${primary}. Trying fallback ${fallback}.`
+  );
+  const fallbackRegistered = globalShortcut.register(fallback, triggerHold);
+  if (!fallbackRegistered) {
+    console.warn(
+      `[shortcuts] Could not register fallback ${fallback}. ${name} hold shortcut is unavailable.`
+    );
+  } else {
+    console.log(`[shortcuts] Registered hold shortcut: ${fallback}`);
+  }
+}
+
+function releaseAllRecordingHolds(reason) {
+  for (const token of recordingHoldStates.keys()) {
+    releaseRecordingHold(token, reason);
   }
 }
 
@@ -428,36 +570,24 @@ function createMenuTemplate() {
           label: "Test Start/Stop Recording Input",
           accelerator: "CmdOrCtrl+Alt+Shift+I",
           click: () => {
-            if (invisibleWindow) {
-              if (!invisibleWindow.isVisible()) {
-                showInvisibleWindow("menu:recording-input");
-              }
-              logEvent("recording", "Menu toggle input requested");
-              invisibleWindow.webContents.send("test-recording-input");
-              setTimeout(() => {
-                if (invisibleWindow && !invisibleWindow.isVisible()) {
-                  showInvisibleWindow("menu:recording-input-auto-recover");
-                }
-              }, 300);
-            }
+            logEvent("recording", "Menu toggle input requested");
+            dispatchRecordingToggle("test-recording-input", "menu:recording-input");
           },
         },
         {
           label: "Test Start/Stop Recording Output",
           accelerator: "CmdOrCtrl+Alt+Shift+O",
           click: () => {
-            if (invisibleWindow) {
-              if (!invisibleWindow.isVisible()) {
-                showInvisibleWindow("menu:recording-output");
-              }
-              logEvent("recording", "Menu toggle output requested");
-              invisibleWindow.webContents.send("test-recording-output");
-              setTimeout(() => {
-                if (invisibleWindow && !invisibleWindow.isVisible()) {
-                  showInvisibleWindow("menu:recording-output-auto-recover");
-                }
-              }, 300);
-            }
+            logEvent("recording", "Menu toggle output requested");
+            dispatchRecordingToggle("test-recording-output", "menu:recording-output");
+          },
+        },
+        {
+          label: "Test Start/Stop Recording Both",
+          accelerator: "CmdOrCtrl+Alt+Shift+B",
+          click: () => {
+            logEvent("recording", "Menu toggle both requested");
+            dispatchRecordingToggle("test-recording-both", "menu:recording-both");
           },
         },
       ],
@@ -705,33 +835,37 @@ function registerShortcuts() {
 
   // Recording shortcuts
   globalShortcut.register("CommandOrControl+Alt+Shift+I", () => {
-    if (invisibleWindow) {
-      if (!invisibleWindow.isVisible()) {
-        showInvisibleWindow("shortcut:recording-input-pre");
-      }
-      logEvent("recording", "Shortcut toggle input requested");
-      invisibleWindow.webContents.send("test-recording-input");
-      setTimeout(() => {
-        if (invisibleWindow && !invisibleWindow.isVisible()) {
-          showInvisibleWindow("shortcut:recording-input-auto-recover");
-        }
-      }, 300);
-    }
+    logEvent("recording", "Shortcut toggle input requested");
+    dispatchRecordingToggle("test-recording-input", "shortcut:recording-input");
   });
 
   globalShortcut.register("CommandOrControl+Alt+Shift+O", () => {
-    if (invisibleWindow) {
-      if (!invisibleWindow.isVisible()) {
-        showInvisibleWindow("shortcut:recording-output-pre");
-      }
-      logEvent("recording", "Shortcut toggle output requested");
-      invisibleWindow.webContents.send("test-recording-output");
-      setTimeout(() => {
-        if (invisibleWindow && !invisibleWindow.isVisible()) {
-          showInvisibleWindow("shortcut:recording-output-auto-recover");
-        }
-      }, 300);
-    }
+    logEvent("recording", "Shortcut toggle output requested");
+    dispatchRecordingToggle("test-recording-output", "shortcut:recording-output");
+  });
+
+  globalShortcut.register("CommandOrControl+Alt+Shift+B", () => {
+    logEvent("recording", "Shortcut toggle both requested");
+    dispatchRecordingToggle("test-recording-both", "shortcut:recording-both");
+  });
+
+  registerRecordingHoldShortcut({
+    name: "Input",
+    token: "shortcut-hold-input",
+    targets: ["input"],
+    primary: "CommandOrControl+Alt+I",
+  });
+  registerRecordingHoldShortcut({
+    name: "Output",
+    token: "shortcut-hold-output",
+    targets: ["output"],
+    primary: "CommandOrControl+Alt+O",
+  });
+  registerRecordingHoldShortcut({
+    name: "Both",
+    token: "shortcut-hold-both",
+    targets: ["input", "output"],
+    primary: "CommandOrControl+Alt+B",
   });
 
   // Window movement shortcuts
@@ -829,6 +963,30 @@ function registerShortcuts() {
     }
   }
 
+  const toggleHelp = () => {
+    if (invisibleWindow) {
+      invisibleWindow.webContents.send("toggle-help");
+      showInvisibleWindow("shortcut:help-toggle");
+    }
+  };
+
+  const helpPrimary = "CommandOrControl+Shift+/";
+  const helpFallback = "CommandOrControl+Alt+Shift+/";
+  const helpRegistered = globalShortcut.register(helpPrimary, toggleHelp);
+  if (!helpRegistered) {
+    console.warn(
+      `[shortcuts] Could not register ${helpPrimary}. Trying fallback ${helpFallback}.`
+    );
+    const helpFallbackRegistered = globalShortcut.register(helpFallback, toggleHelp);
+    if (!helpFallbackRegistered) {
+      console.warn(
+        `[shortcuts] Could not register fallback ${helpFallback}. Help shortcut is unavailable.`
+      );
+    } else {
+      console.log(`[shortcuts] Registered help shortcut: ${helpFallback}`);
+    }
+  }
+
   // Settings shortcut (Command/Ctrl + ,)
   globalShortcut.register("CommandOrControl+,", () => {
     createSettingsWindow();
@@ -918,5 +1076,6 @@ app.on("window-all-closed", function () {
 app.on("before-quit", () => {
   logEvent("app", "before-quit");
   app.isQuitting = true;
+  releaseAllRecordingHolds("before-quit");
   globalShortcut.unregisterAll();
 });

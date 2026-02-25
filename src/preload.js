@@ -91,10 +91,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("test-recording-input", () => callback()),
   onTestRecordingOutput: (callback) =>
     ipcRenderer.on("test-recording-output", () => callback()),
+  onTestRecordingBoth: (callback) =>
+    ipcRenderer.on("test-recording-both", () => callback()),
+  onRecordingHoldStart: (callback) =>
+    ipcRenderer.on("recording-hold-start", (event, payload) => callback(payload)),
+  onRecordingHoldStop: (callback) =>
+    ipcRenderer.on("recording-hold-stop", (event, payload) => callback(payload)),
 
   // Dark mode
   onToggleDarkMode: (callback) =>
     ipcRenderer.on("toggle-dark-mode", (event) => callback()),
+  onToggleHelp: (callback) =>
+    ipcRenderer.on("toggle-help", () => callback()),
 
   // Transcription
   startTranscription: (stream, config, type, callback) => {

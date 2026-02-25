@@ -4,6 +4,7 @@ const typingIndicator = document.getElementById("typing-indicator");
 
 // Chat state
 let messages = [];
+let isHelpOverlayOpen = false;
 let transcriptionPauseMs = 2500;
 const transcriptionProcessing = {
   Input: {
@@ -276,29 +277,25 @@ function setupEventListeners() {
   electronAPI.onToggleDarkMode(() => {
     document.body.classList.toggle("dark-mode");
   });
+  electronAPI.onToggleHelp?.(() => {
+    toggleHelpOverlay();
+  });
 
   // Handle response updates
   electronAPI.onStreamUpdate(updateMessage);
 
   // Handle chat scrolling from shortcuts
   electronAPI.onScrollChat((direction) => {
-    const chatContainer = document.querySelector(".chat-container");
-    if (chatContainer) {
-      if (direction === "up") {
-        chatContainer.scrollTop -= 300; // Scroll up by 300px
-      } else if (direction === "down") {
-        chatContainer.scrollTop += 300; // Scroll down by 300px
-      }
-    }
+    scrollActiveContainer(direction);
   });
 
   window.addEventListener('wheel', (event) => {
     if (event.altKey) {
       // Prevent default to prevent double scrolling side-effects
       event.preventDefault();
-      const chatContainer = document.querySelector(".chat-container");
-      if (chatContainer) {
-        chatContainer.scrollTop += event.deltaY * 5; // Scroll faster
+      const target = getActiveScrollContainer();
+      if (target) {
+        target.scrollTop += event.deltaY * 5; // Scroll faster
       }
     }
   }, { passive: false });
@@ -306,106 +303,222 @@ function setupEventListeners() {
   // Handle recording tests
   electronAPI.onTestRecordingInput(toggleInputRecording);
   electronAPI.onTestRecordingOutput(toggleOutputRecording);
+  electronAPI.onTestRecordingBoth?.(toggleBothRecordings);
+  electronAPI.onRecordingHoldStart?.(handleRecordingHoldStart);
+  electronAPI.onRecordingHoldStop?.(handleRecordingHoldStop);
 }
 
 // Recording states
 let inputRecorder = null;
 let outputRecorder = null;
+const recordingControl = {
+  input: {
+    manualEnabled: false,
+    holdTokens: new Set(),
+    opQueue: Promise.resolve(),
+  },
+  output: {
+    manualEnabled: false,
+    holdTokens: new Set(),
+    opQueue: Promise.resolve(),
+  },
+};
 
-async function toggleInputRecording() {
-  const electronAPI = getElectronAPI();
-  debugLog("Input recording toggle requested", { active: Boolean(inputRecorder) });
-  if (inputRecorder) {
-    electronAPI.stopTranscription("input");
-    inputRecorder = null;
-    debugLog("Input transcription stop requested");
-    await flushTranscriptionBuffer("Input");
-    finalizeLiveTranscription("Input");
-    addAssistantInfoMessage("Stopped transcription for input.");
+function getSourceLabel(type) {
+  return type === "input" ? "Input" : "Output";
+}
+
+function isRecorderActive(type) {
+  return type === "input" ? Boolean(inputRecorder) : Boolean(outputRecorder);
+}
+
+function setRecorderActive(type, active) {
+  if (type === "input") {
+    inputRecorder = active ? true : null;
     return;
   }
+  outputRecorder = active ? true : null;
+}
 
+function isRecordingDesired(type) {
+  const control = recordingControl[type];
+  return Boolean(control.manualEnabled || control.holdTokens.size > 0);
+}
+
+function queueRecordingOperation(type, operation) {
+  const control = recordingControl[type];
+  control.opQueue = control.opQueue.then(operation, operation);
+  return control.opQueue;
+}
+
+async function startRecording(type, reason) {
+  const electronAPI = getElectronAPI();
+  const sourceLabel = getSourceLabel(type);
   try {
     await electronAPI.showWindow();
     const settings = await electronAPI.getSettings();
     transcriptionPauseMs = normalizeTranscriptionPauseMs(settings?.transcriptionPauseMs);
     let constraints = { audio: true };
-    
-    if (!settings.autoDetectInput && settings.inputDeviceId && settings.inputDeviceId !== "default") {
+
+    if (
+      type === "input" &&
+      !settings.autoDetectInput &&
+      settings.inputDeviceId &&
+      settings.inputDeviceId !== "default"
+    ) {
       constraints.audio = { deviceId: { exact: settings.inputDeviceId } };
     }
 
-    debugLog("Starting input transcription", { constraints });
-    await electronAPI.startTranscription(
-      constraints,
-      { pauseMs: transcriptionPauseMs },
-      "input",
-      (text, isFinal) => {
-      if (isFinal) {
-        debugLog("Input transcript received", { length: text?.length || 0 });
-        addTranscriptionToChat("Input", text);
-      }
-      }
-    );
-    await electronAPI.showWindow();
-    inputRecorder = true;
-    debugLog("Input transcription started");
-    addAssistantInfoMessage("Started transcription for input. Use menu again to stop.");
-  } catch (err) {
-    const errorDetails = getErrorDetails(err);
-    debugLog("Input transcription failed", {
-      ...errorDetails,
-    });
-    addErrorMessage("Failed to start input transcription: " + errorDetails.message);
-  }
-}
-
-async function toggleOutputRecording() {
-  const electronAPI = getElectronAPI();
-  debugLog("Output recording toggle requested", { active: Boolean(outputRecorder) });
-  if (outputRecorder) {
-    electronAPI.stopTranscription("output");
-    outputRecorder = null;
-    debugLog("Output transcription stop requested");
-    await flushTranscriptionBuffer("Output");
-    finalizeLiveTranscription("Output");
-    addAssistantInfoMessage("Stopped transcription for output.");
-    return;
-  }
-
-  try {
-    await electronAPI.showWindow();
-    const settings = await electronAPI.getSettings();
-    transcriptionPauseMs = normalizeTranscriptionPauseMs(settings?.transcriptionPauseMs);
-    let constraints = { audio: true };
-    
-    if (!settings.autoDetectOutput && settings.outputDeviceId && settings.outputDeviceId !== "default") {
+    if (
+      type === "output" &&
+      !settings.autoDetectOutput &&
+      settings.outputDeviceId &&
+      settings.outputDeviceId !== "default"
+    ) {
       constraints.audio = { deviceId: { exact: settings.outputDeviceId } };
     }
 
-    debugLog("Starting output transcription", { constraints });
+    debugLog(`Starting ${type} transcription`, { constraints, reason });
+    const startConfig =
+      type === "output"
+        ? { pauseMs: transcriptionPauseMs, outputCaptureMode: "system" }
+        : { pauseMs: transcriptionPauseMs };
     await electronAPI.startTranscription(
       constraints,
-      { pauseMs: transcriptionPauseMs, outputCaptureMode: "system" },
-      "output",
+      startConfig,
+      type,
       (text, isFinal) => {
-      if (isFinal) {
-        debugLog("Output transcript received", { length: text?.length || 0 });
-        addTranscriptionToChat("Output", text);
-      }
+        if (isFinal) {
+          debugLog(`${sourceLabel} transcript received`, { length: text?.length || 0 });
+          addTranscriptionToChat(sourceLabel, text);
+        }
       }
     );
     await electronAPI.showWindow();
-    outputRecorder = true;
-    debugLog("Output transcription started");
-    addAssistantInfoMessage("Started transcription for output. Use menu again to stop.");
+    setRecorderActive(type, true);
+    debugLog(`${type} transcription started`, { reason });
+    addAssistantInfoMessage(`Started transcription for ${type}. Use menu again to stop.`);
   } catch (err) {
     const errorDetails = getErrorDetails(err);
-    debugLog("Output transcription failed", {
+    debugLog(`${sourceLabel} transcription failed`, {
+      reason,
       ...errorDetails,
     });
-    addErrorMessage("Failed to start output transcription: " + errorDetails.message);
+    addErrorMessage(`Failed to start ${type} transcription: ${errorDetails.message}`);
+    recordingControl[type].manualEnabled = false;
+    recordingControl[type].holdTokens.clear();
+    setRecorderActive(type, false);
   }
+}
+
+async function stopRecording(type, reason) {
+  if (!isRecorderActive(type)) {
+    return;
+  }
+  const electronAPI = getElectronAPI();
+  const sourceLabel = getSourceLabel(type);
+  electronAPI.stopTranscription(type);
+  setRecorderActive(type, false);
+  debugLog(`${type} transcription stop requested`, { reason });
+  await flushTranscriptionBuffer(sourceLabel);
+  finalizeLiveTranscription(sourceLabel);
+  addAssistantInfoMessage(`Stopped transcription for ${type}.`);
+}
+
+async function reconcileRecordingState(type, reason) {
+  await queueRecordingOperation(type, async () => {
+    while (true) {
+      const desired = isRecordingDesired(type);
+      const active = isRecorderActive(type);
+      if (desired === active) {
+        return;
+      }
+      if (desired) {
+        await startRecording(type, reason);
+      } else {
+        await stopRecording(type, reason);
+      }
+    }
+  });
+}
+
+async function toggleManualRecording(type) {
+  recordingControl[type].manualEnabled = !recordingControl[type].manualEnabled;
+  debugLog(`${type} recording toggle requested`, {
+    manualEnabled: recordingControl[type].manualEnabled,
+    holdTokens: [...recordingControl[type].holdTokens],
+  });
+  await reconcileRecordingState(type, "manual-toggle");
+}
+
+async function toggleInputRecording() {
+  await toggleManualRecording("input");
+}
+
+async function toggleOutputRecording() {
+  await toggleManualRecording("output");
+}
+
+async function toggleBothRecordings() {
+  const nextValue = !(
+    recordingControl.input.manualEnabled && recordingControl.output.manualEnabled
+  );
+  recordingControl.input.manualEnabled = nextValue;
+  recordingControl.output.manualEnabled = nextValue;
+  debugLog("Both recording toggle requested", { manualEnabled: nextValue });
+  await Promise.all([
+    reconcileRecordingState("input", "manual-toggle-both"),
+    reconcileRecordingState("output", "manual-toggle-both"),
+  ]);
+}
+
+function normalizeHoldTargets(targets) {
+  if (!Array.isArray(targets)) {
+    return ["input", "output"];
+  }
+  return targets.filter((target) => target === "input" || target === "output");
+}
+
+async function handleRecordingHoldStart(payload = {}) {
+  const holdTargets = normalizeHoldTargets(payload.targets);
+  const token = payload.token || "hold-default";
+  const changed = [];
+  for (const type of holdTargets) {
+    const tokens = recordingControl[type].holdTokens;
+    if (!tokens.has(token)) {
+      tokens.add(token);
+      changed.push(type);
+    }
+  }
+  if (!changed.length) {
+    return;
+  }
+  debugLog("Recording hold start requested", {
+    token,
+    targets: holdTargets,
+  });
+  await Promise.all(changed.map((type) => reconcileRecordingState(type, `hold-start:${token}`)));
+}
+
+async function handleRecordingHoldStop(payload = {}) {
+  const holdTargets = normalizeHoldTargets(payload.targets);
+  const token = payload.token || "hold-default";
+  const changed = [];
+  for (const type of holdTargets) {
+    const tokens = recordingControl[type].holdTokens;
+    if (tokens.has(token)) {
+      tokens.delete(token);
+      changed.push(type);
+    }
+  }
+  if (!changed.length) {
+    return;
+  }
+  debugLog("Recording hold stop requested", {
+    token,
+    targets: holdTargets,
+  });
+  await Promise.all(changed.map((type) => reconcileRecordingState(type, `hold-stop:${token}`)));
 }
 
 async function addTranscriptionToChat(source, text) {
@@ -437,26 +550,14 @@ function handleKeyboardShortcuts(event) {
     handleTestResponse("write python code to print 'Hello, world!'");
   }
 
-  // Toggle help with '?'
-  if (event.key === "?" && !event.ctrlKey && !event.metaKey) {
-    const nullState = document.getElementById("null-state");
-    if (nullState) {
-      const isHidden = nullState.style.display === "none";
-      nullState.style.display = isHidden ? "flex" : "none";
-      // If showing, bring to front if it's an overlay (it's not yet, but let's make it look like one)
-      if (isHidden) {
-        nullState.style.backgroundColor = "rgba(0, 0, 0, 0.9)";
-        nullState.style.position = "absolute";
-        nullState.style.top = "0";
-        nullState.style.left = "0";
-        nullState.style.width = "100%";
-        nullState.style.height = "100%";
-        nullState.style.zIndex = "100";
-      } else {
-        // Reset to original style if needed, but updateNullStateVisibility will handle it normally
-        updateNullStateVisibility();
-      }
-    }
+  const isQuestionMarkShortcut =
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    (event.key === "?" || (event.shiftKey && event.code === "Slash"));
+  if (isQuestionMarkShortcut) {
+    event.preventDefault();
+    toggleHelpOverlay();
   }
 }
 
@@ -628,8 +729,77 @@ function resetChat() {
 function updateNullStateVisibility() {
   const nullState = document.getElementById("null-state");
   if (nullState) {
-    nullState.style.display = messages.length === 0 ? "flex" : "none";
+    nullState.style.display =
+      messages.length === 0 || isHelpOverlayOpen ? "flex" : "none";
   }
+}
+
+function getActiveScrollContainer() {
+  if (isHelpOverlayOpen) {
+    const helpOverlay = document.getElementById("null-state");
+    if (helpOverlay && helpOverlay.style.display !== "none") {
+      return helpOverlay;
+    }
+  }
+  return document.querySelector(".chat-container");
+}
+
+function scrollActiveContainer(direction, amount = 300) {
+  const target = getActiveScrollContainer();
+  if (!target) {
+    return;
+  }
+  if (direction === "up") {
+    target.scrollTop -= amount;
+  } else if (direction === "down") {
+    target.scrollTop += amount;
+  }
+}
+
+function applyHelpOverlayStyling(enabled) {
+  const nullState = document.getElementById("null-state");
+  if (!nullState) {
+    return;
+  }
+  if (!enabled) {
+    nullState.style.backgroundColor = "";
+    nullState.style.position = "";
+    nullState.style.top = "";
+    nullState.style.left = "";
+    nullState.style.width = "";
+    nullState.style.height = "";
+    nullState.style.zIndex = "";
+    nullState.style.overflowY = "";
+    nullState.style.overflowX = "";
+    nullState.style.justifyContent = "";
+    nullState.style.alignItems = "";
+    return;
+  }
+  nullState.style.backgroundColor = "rgba(0, 0, 0, 0.9)";
+  nullState.style.position = "absolute";
+  nullState.style.top = "0";
+  nullState.style.left = "0";
+  nullState.style.width = "100%";
+  nullState.style.height = "100%";
+  nullState.style.zIndex = "100";
+  nullState.style.overflowY = "auto";
+  nullState.style.overflowX = "hidden";
+  nullState.style.justifyContent = "flex-start";
+  nullState.style.alignItems = "center";
+}
+
+function toggleHelpOverlay(forceValue) {
+  const nextValue =
+    typeof forceValue === "boolean" ? forceValue : !isHelpOverlayOpen;
+  isHelpOverlayOpen = nextValue;
+  applyHelpOverlayStyling(isHelpOverlayOpen);
+  if (isHelpOverlayOpen) {
+    const nullState = document.getElementById("null-state");
+    if (nullState) {
+      nullState.scrollTop = 0;
+    }
+  }
+  updateNullStateVisibility();
 }
 
 if (typeof window !== "undefined") {
@@ -642,6 +812,10 @@ if (typeof window !== "undefined") {
     },
     toggleInputRecording,
     toggleOutputRecording,
+    toggleBothRecordings,
+    handleRecordingHoldStart,
+    handleRecordingHoldStop,
+    toggleHelpOverlay,
     updateMessage,
   };
 }

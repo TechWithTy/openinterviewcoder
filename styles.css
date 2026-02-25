@@ -377,6 +377,9 @@ kbd {
   padding: 2rem;
   text-align: center;
   color: var(--text-color);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .null-state-content {

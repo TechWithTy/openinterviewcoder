@@ -236,6 +236,79 @@ test.describe("Electron transcription flow", () => {
     ).toBeVisible();
   });
 
+  test("supports toggling input and output together", async () => {
+    await installRendererMocks(window, {
+      settings: { transcriptionPauseMs: 1000 },
+    });
+
+    await window.evaluate(async () => {
+      if (!window.__rendererTestHooks?.toggleBothRecordings) {
+        throw new Error("toggleBothRecordings hook is unavailable");
+      }
+      await window.__rendererTestHooks.toggleBothRecordings();
+    });
+
+    const stateAfterStart = await getRendererMockState(window);
+    const startedTypes = stateAfterStart.startCalls.map((call) => call.type);
+    expect(startedTypes).toContain("input");
+    expect(startedTypes).toContain("output");
+
+    await window.evaluate(async () => {
+      await window.__rendererTestHooks.toggleBothRecordings();
+    });
+
+    const stateAfterStop = await getRendererMockState(window);
+    expect(stateAfterStop.stopCalls).toContain("input");
+    expect(stateAfterStop.stopCalls).toContain("output");
+  });
+
+  test("keeps manual toggles working while hold start/stop is used", async () => {
+    await installRendererMocks(window, {
+      settings: { transcriptionPauseMs: 1000 },
+    });
+
+    await window.evaluate(async () => {
+      await window.__rendererTestHooks.toggleInputRecording();
+    });
+
+    await window.evaluate(async () => {
+      if (!window.__rendererTestHooks?.handleRecordingHoldStart) {
+        throw new Error("handleRecordingHoldStart hook is unavailable");
+      }
+      await window.__rendererTestHooks.handleRecordingHoldStart({
+        token: "hold-both",
+        targets: ["input", "output"],
+      });
+    });
+
+    const stateDuringHold = await getRendererMockState(window);
+    const startedTypes = stateDuringHold.startCalls.map((call) => call.type);
+    expect(startedTypes).toContain("input");
+    expect(startedTypes).toContain("output");
+
+    await window.evaluate(async () => {
+      await window.__rendererTestHooks.handleRecordingHoldStop({
+        token: "hold-both",
+        targets: ["input", "output"],
+      });
+    });
+
+    await expect
+      .poll(async () => (await getRendererMockState(window)).stopCalls.includes("output"))
+      .toBeTruthy();
+
+    const stopStateAfterHold = await getRendererMockState(window);
+    expect(stopStateAfterHold.stopCalls).not.toContain("input");
+
+    await window.evaluate(async () => {
+      await window.__rendererTestHooks.toggleInputRecording();
+    });
+
+    await expect
+      .poll(async () => (await getRendererMockState(window)).stopCalls.includes("input"))
+      .toBeTruthy();
+  });
+
   test("shows a clear UI error when output transcription start fails", async () => {
     await installRendererMocks(window, {
       failStartForType: "output",
