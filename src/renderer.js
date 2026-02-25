@@ -256,6 +256,13 @@ function setupEventListeners() {
     debugLog("Renderer visibilitychange", {
       visibilityState: document.visibilityState,
     });
+    if (document.visibilityState === "visible") {
+      resetHomePanelScroll({ forceChatTop: false });
+    }
+  });
+
+  window.addEventListener("focus", () => {
+    resetHomePanelScroll({ forceChatTop: false });
   });
 
   // Window position update
@@ -293,10 +300,7 @@ function setupEventListeners() {
     if (event.altKey) {
       // Prevent default to prevent double scrolling side-effects
       event.preventDefault();
-      const target = getActiveScrollContainer();
-      if (target) {
-        target.scrollTop += event.deltaY * 5; // Scroll faster
-      }
+      scrollByDelta(event.deltaY * 5); // Scroll faster
     }
   }, { passive: false });
 
@@ -729,30 +733,104 @@ function resetChat() {
 function updateNullStateVisibility() {
   const nullState = document.getElementById("null-state");
   if (nullState) {
-    nullState.style.display =
-      messages.length === 0 || isHelpOverlayOpen ? "flex" : "none";
+    const shouldShow = messages.length === 0 || isHelpOverlayOpen;
+    nullState.style.display = shouldShow ? "flex" : "none";
+    if (shouldShow && !isHelpOverlayOpen) {
+      resetHomePanelScroll({ forceChatTop: true });
+    }
+  }
+}
+
+function resetHomePanelScroll(options = {}) {
+  const { forceChatTop = false } = options;
+  const nullState = document.getElementById("null-state");
+  if (!nullState) {
+    return;
+  }
+  const shouldResetNullState = isHelpOverlayOpen || messages.length === 0;
+  if (shouldResetNullState) {
+    nullState.scrollTop = 0;
+    const shortcutsContainer = nullState.querySelector(".shortcuts");
+    if (shortcutsContainer) {
+      shortcutsContainer.scrollTop = 0;
+      requestAnimationFrame(() => {
+        shortcutsContainer.scrollTop = 0;
+      });
+    }
+    requestAnimationFrame(() => {
+      nullState.scrollTop = 0;
+    });
+  }
+  if (forceChatTop || messages.length === 0) {
+    const chatContainer = document.querySelector(".chat-container");
+    if (chatContainer) {
+      chatContainer.scrollTop = 0;
+      requestAnimationFrame(() => {
+        chatContainer.scrollTop = 0;
+      });
+    }
   }
 }
 
 function getActiveScrollContainer() {
-  if (isHelpOverlayOpen) {
-    const helpOverlay = document.getElementById("null-state");
-    if (helpOverlay && helpOverlay.style.display !== "none") {
-      return helpOverlay;
+  const nullState = document.getElementById("null-state");
+  const nullStateVisible = nullState && nullState.style.display !== "none";
+  if (nullStateVisible) {
+    const shortcutsContainer = nullState.querySelector(".shortcuts");
+    if (shortcutsContainer) {
+      return shortcutsContainer;
     }
+  }
+  const helpOverlay = document.getElementById("null-state");
+  if (isHelpOverlayOpen && helpOverlay && helpOverlay.style.display !== "none") {
+    return helpOverlay;
   }
   return document.querySelector(".chat-container");
 }
 
-function scrollActiveContainer(direction, amount = 300) {
-  const target = getActiveScrollContainer();
-  if (!target) {
+function getSecondaryScrollContainer(primary) {
+  const chatContainer = document.querySelector(".chat-container");
+  const helpOverlay = document.getElementById("null-state");
+  const shortcutsContainer = helpOverlay?.querySelector(".shortcuts") || null;
+  const helpVisible = helpOverlay && helpOverlay.style.display !== "none";
+
+  if (primary === chatContainer) {
+    if (helpVisible && shortcutsContainer) {
+      return shortcutsContainer;
+    }
+    return helpVisible ? helpOverlay : null;
+  }
+  if (primary === helpOverlay || primary === shortcutsContainer) {
+    return chatContainer;
+  }
+  return chatContainer;
+}
+
+function tryScrollContainer(container, delta) {
+  if (!container) {
+    return false;
+  }
+  const before = container.scrollTop;
+  container.scrollTop += delta;
+  return container.scrollTop !== before;
+}
+
+function scrollByDelta(delta) {
+  const primary = getActiveScrollContainer();
+  const didScrollPrimary = tryScrollContainer(primary, delta);
+  if (didScrollPrimary) {
     return;
   }
+  const secondary = getSecondaryScrollContainer(primary);
+  tryScrollContainer(secondary, delta);
+}
+
+function scrollActiveContainer(direction, amount = 300) {
+  const delta = direction === "up" ? -amount : amount;
   if (direction === "up") {
-    target.scrollTop -= amount;
+    scrollByDelta(delta);
   } else if (direction === "down") {
-    target.scrollTop += amount;
+    scrollByDelta(delta);
   }
 }
 
@@ -793,13 +871,12 @@ function toggleHelpOverlay(forceValue) {
     typeof forceValue === "boolean" ? forceValue : !isHelpOverlayOpen;
   isHelpOverlayOpen = nextValue;
   applyHelpOverlayStyling(isHelpOverlayOpen);
-  if (isHelpOverlayOpen) {
-    const nullState = document.getElementById("null-state");
-    if (nullState) {
-      nullState.scrollTop = 0;
-    }
+  const nullState = document.getElementById("null-state");
+  if (nullState) {
+    nullState.scrollTop = 0;
   }
   updateNullStateVisibility();
+  resetHomePanelScroll({ forceChatTop: !isHelpOverlayOpen });
 }
 
 if (typeof window !== "undefined") {

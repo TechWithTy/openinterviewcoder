@@ -40,6 +40,7 @@ body.dark-mode #invisible-container {
 
 /* Chat container */
 .chat-container {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   padding: 20px;
@@ -372,18 +373,31 @@ kbd {
 .null-state {
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  padding: 2rem;
+  justify-content: flex-start;
+  position: absolute;
+  inset: 0;
+  padding: 1.25rem 2rem 2rem;
   text-align: center;
   color: var(--text-color);
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  z-index: 20;
 }
 
 .null-state-content {
-  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1100px;
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+}
+
+.null-state-header {
+  flex: 0 0 auto;
+  padding-bottom: 0.5rem;
 }
 
 .null-state h2 {
@@ -398,20 +412,51 @@ kbd {
 }
 
 .shortcuts {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  column-gap: 0.75rem;
+  row-gap: 0.45rem;
   margin-top: 1rem;
-  align-items: center;
+  align-items: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.35rem;
+}
+
+.shortcut-section-title {
+  margin-top: 0.65rem;
+  margin-bottom: 0.2rem;
+  padding: 0.2rem 0.35rem;
+  border-left: 2px solid rgba(125, 211, 252, 0.85);
+  color: rgba(125, 211, 252, 0.95);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
 }
 
 .shortcut-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(130px, 200px) 1fr;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 1rem;
-  margin: 2px 0;
+  gap: 0.55rem;
+  padding: 0.4rem 0.6rem;
+  margin: 0;
   font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.shortcut-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.2rem;
 }
 
 .shortcut-item kbd {
@@ -422,8 +467,23 @@ kbd {
   font-size: 0.9rem;
 }
 
-.shortcut-item span {
+.shortcut-label {
   color: rgba(255, 255, 255, 0.9);
+  text-align: left;
+  line-height: 1.35;
+}
+
+@media (max-width: 980px) {
+  .shortcuts {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .shortcut-item {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
 }
 
 /* Hide null state when there are messages */
@@ -438,6 +498,7 @@ kbd {
 }
 
 .octo-logo img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
