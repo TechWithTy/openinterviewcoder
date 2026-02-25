@@ -29,6 +29,58 @@ Format your responses in sections:
 
 let isInitialized = false;
 
+function mimeTypeToFilename(mimeType) {
+  if (!mimeType) return "chunk.webm";
+  if (mimeType.includes("ogg")) return "chunk.ogg";
+  if (mimeType.includes("wav")) return "chunk.wav";
+  if (mimeType.includes("mp4")) return "chunk.mp4";
+  return "chunk.webm";
+}
+
+async function transcribeAudioChunk({ audioBase64, mimeType, type }) {
+  const apiKey = config.getOpenAIKey();
+  if (!audioBase64) {
+    throw new Error("Missing audio payload");
+  }
+
+  const FormDataCtor = typeof FormData !== "undefined" ? FormData : null;
+  const BlobCtor = typeof Blob !== "undefined" ? Blob : require("buffer").Blob;
+  if (!FormDataCtor || !BlobCtor) {
+    throw new Error("Runtime does not support FormData/Blob for audio transcription");
+  }
+
+  const fileBuffer = Buffer.from(audioBase64, "base64");
+  const form = new FormDataCtor();
+  const filename = mimeTypeToFilename(mimeType);
+  const blob = new BlobCtor([fileBuffer], { type: mimeType || "audio/webm" });
+
+  form.append("file", blob, filename);
+  form.append("model", "gpt-4o-mini-transcribe");
+  form.append("temperature", "0");
+  form.append(
+    "prompt",
+    type === "output"
+      ? "Transcribe clear spoken words from speaker/system audio."
+      : "Transcribe clear spoken words from microphone input."
+  );
+
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Audio transcription API error (${response.status}): ${errorBody}`);
+  }
+
+  const data = await response.json();
+  return (data.text || "").trim();
+}
+
 // Initialize the LLM service
 // Initialize the LLM service
 async function initializeLLMService() {
@@ -49,6 +101,29 @@ async function initializeLLMService() {
         return await makeLLMRequest(event, { prompt });
       } catch (error) {
         console.error("LLM Test Error:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("process-transcription", async (event, text) => {
+      try {
+        validateConfig();
+        return await makeLLMRequest(event, { 
+          prompt: `The following is transcribed speech: "${text}". Please summarize it or answer any questions if relevant.`
+        });
+      } catch (error) {
+        console.error("Transcription processing error:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("transcribe-audio-chunk", async (event, payload) => {
+      try {
+        validateConfig();
+        const text = await transcribeAudioChunk(payload || {});
+        return { success: true, text };
+      } catch (error) {
+        console.error("Audio chunk transcription error:", error);
         return { success: false, error: error.message };
       }
     });

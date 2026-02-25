@@ -115,7 +115,7 @@
           <label class="setting-label">OpenAI API Key</label>
           <div class="setting-control">
             <input
-              type="text"
+              type="password"
               id="openaiKey"
               placeholder="Enter your OpenAI API key"
             />
@@ -166,6 +166,64 @@
           <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="twoStepCheck" style="width: auto;" />
             <span style="color: #cbd5e1; font-size: 14px;">Use gpt-4o-mini to extract text first, then pass text to target model (Required for o1/o3-mini).</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">Auto-detect Input Device</label>
+          <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="autoDetectInputCheck" style="width: auto;" checked />
+            <span style="color: #cbd5e1; font-size: 14px;">Automatically select the best microphone</span>
+          </div>
+        </div>
+        <div class="setting-item" id="inputDeviceContainer">
+          <label class="setting-label">Input Device (Microphone)</label>
+          <div class="setting-control">
+            <select id="inputDeviceSelect"></select>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">Auto-detect Output Device</label>
+          <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="autoDetectOutputCheck" style="width: auto;" checked />
+            <span style="color: #cbd5e1; font-size: 14px;">Automatically select the best speakers/system audio</span>
+          </div>
+        </div>
+        <div class="setting-item" id="outputDeviceContainer">
+          <label class="setting-label">Output Device (Speakers)</label>
+          <div class="setting-control">
+            <select id="outputDeviceSelect"></select>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">Transcription Pause (ms)</label>
+          <div class="setting-control">
+            <input
+              type="number"
+              id="transcriptionPauseMs"
+              min="1000"
+              max="60000"
+              step="500"
+              placeholder="2500"
+            />
+            <div class="api-key-description">
+              Minimum detected silence before closing a speech segment and sending to AI (higher = fewer interruptions).
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">Azure Speech Key</label>
+          <div class="setting-control">
+            <input type="password" id="azureSpeechKey" placeholder="Enter Azure Speech/Whisper key" />
+          </div>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label">Azure Speech Region</label>
+          <div class="setting-control">
+            <input type="text" id="azureSpeechRegion" placeholder="e.g. eastus" />
           </div>
         </div>
 

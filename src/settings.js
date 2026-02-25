@@ -7,11 +7,74 @@ document.addEventListener("DOMContentLoaded", async () => {
   const predefinedPromptsSelect = document.getElementById("predefinedPrompts");
   const twoStepCheck = document.getElementById("twoStepCheck");
 
+  const autoDetectInputCheck = document.getElementById("autoDetectInputCheck");
+  const inputDeviceContainer = document.getElementById("inputDeviceContainer");
+  const inputDeviceSelect = document.getElementById("inputDeviceSelect");
+
+  const autoDetectOutputCheck = document.getElementById("autoDetectOutputCheck");
+  const outputDeviceContainer = document.getElementById("outputDeviceContainer");
+  const outputDeviceSelect = document.getElementById("outputDeviceSelect");
+  const transcriptionPauseMsInput = document.getElementById("transcriptionPauseMs");
+
   // Verify all elements exist
-  if (!openaiKeyInput || !saveButton || !promptInput || !predefinedPromptsSelect || !modelSelect || !twoStepCheck) {
+  if (
+    !openaiKeyInput ||
+    !saveButton ||
+    !promptInput ||
+    !predefinedPromptsSelect ||
+    !modelSelect ||
+    !twoStepCheck ||
+    !autoDetectInputCheck ||
+    !inputDeviceSelect ||
+    !transcriptionPauseMsInput
+  ) {
     console.error("Required DOM elements not found");
     return;
   }
+
+  // Load devices list
+  async function loadDevices() {
+    try {
+      // Prompt for permission if needed
+      await navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch(err => {
+        console.warn("Could not get initial permission for device enumeration", err);
+      });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      
+      const audioInputs = devices.filter(d => d.kind === "audioinput");
+      inputDeviceSelect.innerHTML = "";
+      audioInputs.forEach(device => {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.text = device.label || `Microphone ${inputDeviceSelect.length + 1}`;
+        inputDeviceSelect.appendChild(option);
+      });
+
+      const audioOutputs = devices.filter(d => d.kind === "audiooutput");
+      outputDeviceSelect.innerHTML = "";
+      audioOutputs.forEach(device => {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.text = device.label || `Speaker ${outputDeviceSelect.length + 1}`;
+        outputDeviceSelect.appendChild(option);
+      });
+
+    } catch (err) {
+      console.error("Error loading devices:", err);
+    }
+  }
+
+  await loadDevices();
+
+  // Toggle dropdown visibility based on auto-detect
+  function toggleDeviceSelectors() {
+    inputDeviceContainer.style.display = autoDetectInputCheck.checked ? 'none' : 'flex';
+    outputDeviceContainer.style.display = autoDetectOutputCheck.checked ? 'none' : 'flex';
+  }
+
+  autoDetectInputCheck.addEventListener('change', toggleDeviceSelectors);
+  autoDetectOutputCheck.addEventListener('change', toggleDeviceSelectors);
+
 
   // Predefined prompt templates
   const PREDEFINED_PROMPTS = {
@@ -73,17 +136,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (settings && settings.twoStep !== undefined) {
       twoStepCheck.checked = settings.twoStep;
     }
+    if (settings && settings.autoDetectInput !== undefined) {
+      autoDetectInputCheck.checked = settings.autoDetectInput;
+    }
+    if (settings && settings.autoDetectOutput !== undefined) {
+      autoDetectOutputCheck.checked = settings.autoDetectOutput;
+    }
+    if (settings && settings.inputDeviceId) {
+      inputDeviceSelect.value = settings.inputDeviceId;
+    }
+    if (settings && settings.outputDeviceId) {
+      outputDeviceSelect.value = settings.outputDeviceId;
+    }
+    transcriptionPauseMsInput.value = String(settings?.transcriptionPauseMs ?? 2500);
+    if (settings && settings.azureSpeechKey) {
+      document.getElementById("azureSpeechKey").value = settings.azureSpeechKey;
+    }
+    if (settings && settings.azureSpeechRegion) {
+      document.getElementById("azureSpeechRegion").value = settings.azureSpeechRegion;
+    }
+
+    // Refresh UI state
+    toggleDeviceSelectors();
   } catch (error) {
     console.error("Error loading settings:", error);
   }
 
   // Handle save button click
   saveButton.addEventListener("click", async () => {
+    const pauseMsRaw = Number(transcriptionPauseMsInput.value);
+    const transcriptionPauseMs = Number.isFinite(pauseMsRaw)
+      ? Math.min(60000, Math.max(1000, Math.round(pauseMsRaw)))
+      : 2500;
+
     const settings = {
       openaiKey: openaiKeyInput.value.trim(),
       prompt: promptInput.value.trim(),
       model: modelSelect.value,
       twoStep: twoStepCheck.checked,
+      autoDetectInput: autoDetectInputCheck.checked,
+      autoDetectOutput: autoDetectOutputCheck.checked,
+      transcriptionPauseMs,
+      inputDeviceId: inputDeviceSelect.value,
+      outputDeviceId: outputDeviceSelect.value,
+      azureSpeechKey: document.getElementById("azureSpeechKey").value.trim(),
+      azureSpeechRegion: document.getElementById("azureSpeechRegion").value.trim(),
     };
 
     try {

@@ -1,14 +1,18 @@
 require("dotenv").config();
+
 const {
   app,
   BrowserWindow,
   globalShortcut,
   ipcMain,
   screen,
+  session,
   desktopCapturer,
   Menu,
   Tray,
+  shell,
 } = require("electron");
+const fs = require("fs");
 const path = require("path");
 const {
   ensureScreenRecordingPermission,
@@ -45,6 +49,58 @@ if (hasTwoStepFlag) {
   config.setTwoStep(true);
 }
 
+let appLogFilePath = null;
+
+function serializeForLog(value) {
+  if (value === undefined) {
+    return "";
+  }
+  try {
+    return ` ${JSON.stringify(value)}`;
+  } catch {
+    return ` ${String(value)}`;
+  }
+}
+
+function logEvent(scope, message, data) {
+  const line = `[${new Date().toISOString()}] [${scope}] ${message}${serializeForLog(
+    data
+  )}`;
+  console.log(line);
+  if (appLogFilePath) {
+    try {
+      fs.appendFileSync(appLogFilePath, `${line}\n`);
+    } catch (error) {
+      console.error(`[log] Failed to write log file: ${error.message}`);
+    }
+  }
+}
+
+function initializeLogger() {
+  try {
+    const logDir = path.join(app.getPath("userData"), "logs");
+    fs.mkdirSync(logDir, { recursive: true });
+    appLogFilePath = path.join(logDir, "runtime.log");
+    logEvent("app", "Logger initialized", { pid: process.pid, logFile: appLogFilePath });
+  } catch (error) {
+    console.error(`[log] Failed to initialize logger: ${error.message}`);
+  }
+}
+
+process.on("uncaughtException", (error) => {
+  logEvent("process", "uncaughtException", {
+    message: error?.message,
+    stack: error?.stack,
+  });
+});
+
+process.on("unhandledRejection", (reason) => {
+  logEvent("process", "unhandledRejection", {
+    reason: reason?.message || String(reason),
+    stack: reason?.stack,
+  });
+});
+
 process.argv.forEach((arg) => {
   if (arg.startsWith("--model=")) {
     const model = arg.split("=")[1];
@@ -66,6 +122,13 @@ ipcMain.handle("get-settings", () => {
     prompt: config.getPrompt(),
     model: config.getModel(),
     twoStep: config.getTwoStep(),
+    autoDetectInput: config.getAutoDetectInput(),
+    autoDetectOutput: config.getAutoDetectOutput(),
+    transcriptionPauseMs: config.getTranscriptionPauseMs(),
+    inputDeviceId: config.getInputDeviceId(),
+    outputDeviceId: config.getOutputDeviceId(),
+    azureSpeechKey: config.getAzureSpeechKey(),
+    azureSpeechRegion: config.getAzureSpeechRegion(),
   };
 });
 
@@ -89,6 +152,27 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   if (settings.twoStep !== undefined) {
     config.setTwoStep(settings.twoStep);
+  }
+  if (settings.autoDetectInput !== undefined) {
+    config.setAutoDetectInput(settings.autoDetectInput);
+  }
+  if (settings.autoDetectOutput !== undefined) {
+    config.setAutoDetectOutput(settings.autoDetectOutput);
+  }
+  if (settings.transcriptionPauseMs !== undefined) {
+    config.setTranscriptionPauseMs(settings.transcriptionPauseMs);
+  }
+  if (settings.inputDeviceId !== undefined) {
+    config.setInputDeviceId(settings.inputDeviceId);
+  }
+  if (settings.outputDeviceId !== undefined) {
+    config.setOutputDeviceId(settings.outputDeviceId);
+  }
+  if (settings.azureSpeechKey !== undefined) {
+    config.setAzureSpeechKey(settings.azureSpeechKey);
+  }
+  if (settings.azureSpeechRegion !== undefined) {
+    config.setAzureSpeechRegion(settings.azureSpeechRegion);
   }
   // Reinitialize LLM service with new API key
   await initializeLLMService();
@@ -133,19 +217,143 @@ ipcMain.handle("get-recent-screenshots", () => {
 // IPC handlers for window controls
 ipcMain.handle("minimize-window", () => {
   if (invisibleWindow) {
+    logEvent("window", "minimize requested via IPC");
     invisibleWindow.minimize();
   }
 });
 
 ipcMain.handle("hide-window", () => {
-  if (invisibleWindow) {
-    invisibleWindow.hide();
-  }
+  hideInvisibleWindow("ipc:hide-window");
+});
+
+ipcMain.handle("show-window", () => {
+  showInvisibleWindow("ipc:show-window");
+});
+
+ipcMain.handle("debug-log", (event, payload) => {
+  logEvent("renderer", payload?.message || "debug-log", payload);
+  return true;
+});
+
+ipcMain.handle("get-debug-log-path", () => {
+  return appLogFilePath;
 });
 
 let invisibleWindow;
 let settingsWindow = null;
 let tray = null;
+let lastRendererCrashAt = 0;
+let isRecoveringRendererWindow = false;
+
+function showInvisibleWindow(reason) {
+  if (invisibleWindow) {
+    logEvent("window", "showInactive requested", {
+      reason,
+      visibleBefore: invisibleWindow.isVisible(),
+    });
+    invisibleWindow.showInactive();
+  }
+}
+
+function hideInvisibleWindow(reason) {
+  if (invisibleWindow) {
+    logEvent("window", "hide requested", {
+      reason,
+      visibleBefore: invisibleWindow.isVisible(),
+    });
+    invisibleWindow.hide();
+  }
+}
+
+function recreateInvisibleWindow(reason) {
+  const now = Date.now();
+  if (now - lastRendererCrashAt < 1000) {
+    logEvent("window", "Skip recreate due to crash loop guard", { reason });
+    return;
+  }
+  lastRendererCrashAt = now;
+
+  const previousWindow = invisibleWindow;
+  const shouldShow = previousWindow?.isVisible?.() ?? true;
+  logEvent("window", "Recreating invisible window", { reason, shouldShow });
+  isRecoveringRendererWindow = true;
+
+  try {
+    createInvisibleWindow();
+    if (shouldShow) {
+      showInvisibleWindow(`recover:${reason}`);
+    }
+  } finally {
+    try {
+      if (
+        previousWindow &&
+        !previousWindow.isDestroyed() &&
+        previousWindow !== invisibleWindow
+      ) {
+        previousWindow.destroy();
+      }
+    } catch (error) {
+      logEvent("window", "Error while destroying crashed window", {
+        message: error?.message,
+      });
+    } finally {
+      setTimeout(() => {
+        isRecoveringRendererWindow = false;
+      }, 500);
+    }
+  }
+}
+
+function configureDisplayMediaCapture() {
+  try {
+    session.defaultSession.setDisplayMediaRequestHandler(
+      async (_request, callback) => {
+        try {
+          const sources = await desktopCapturer.getSources({
+            types: ["screen", "window"],
+          });
+          const selectedSource = sources[0];
+          if (!selectedSource) {
+            logEvent("recording", "No display media source available");
+            callback({ video: null, audio: null });
+            return;
+          }
+
+          const response = { video: selectedSource };
+          if (process.platform === "win32") {
+            response.audio = "loopback";
+          }
+
+          callback(response);
+          logEvent("recording", "Display media source selected", {
+            sourceId: selectedSource.id,
+            sourceName: selectedSource.name,
+            audio: response.audio || "none",
+          });
+        } catch (error) {
+          logEvent("recording", "Display media selection failed", {
+            message: error?.message,
+            stack: error?.stack,
+          });
+          callback({ video: null, audio: null });
+        }
+      },
+      {
+        useSystemPicker: false,
+      }
+    );
+
+    logEvent("recording", "Display media request handler configured", {
+      platform: process.platform,
+      useSystemPicker: false,
+    });
+  } catch (error) {
+    logEvent("recording", "Failed to configure display media handler", {
+      message: error?.message,
+      stack: error?.stack,
+    });
+  }
+}
 
 // Create shared menu template
 function createMenuTemplate() {
@@ -159,6 +367,15 @@ function createMenuTemplate() {
           label: process.platform === "darwin" ? "Preferences..." : "Settings...",
           accelerator: "CommandOrControl+,",
           click: () => createSettingsWindow(),
+        },
+        {
+          label: "Open Runtime Log",
+          click: () => {
+            if (appLogFilePath) {
+              logEvent("app", "Opening runtime log", { path: appLogFilePath });
+              shell.openPath(appLogFilePath);
+            }
+          },
         },
         { type: "separator" },
         ...(process.platform === "darwin"
@@ -195,10 +412,51 @@ function createMenuTemplate() {
         {
           label: "Toggle Developer Tools",
           accelerator:
-            process.platform === "darwin" ? "Alt+Command+I" : "Ctrl+Shift+I",
+            process.platform === "darwin" ? "Alt+Command+J" : "F12",
           click: (_, window) => {
             if (window) {
               window.webContents.toggleDevTools();
+            }
+          },
+        },
+      ],
+    },
+    {
+      label: "Recording",
+      submenu: [
+        {
+          label: "Test Start/Stop Recording Input",
+          accelerator: "CmdOrCtrl+Alt+Shift+I",
+          click: () => {
+            if (invisibleWindow) {
+              if (!invisibleWindow.isVisible()) {
+                showInvisibleWindow("menu:recording-input");
+              }
+              logEvent("recording", "Menu toggle input requested");
+              invisibleWindow.webContents.send("test-recording-input");
+              setTimeout(() => {
+                if (invisibleWindow && !invisibleWindow.isVisible()) {
+                  showInvisibleWindow("menu:recording-input-auto-recover");
+                }
+              }, 300);
+            }
+          },
+        },
+        {
+          label: "Test Start/Stop Recording Output",
+          accelerator: "CmdOrCtrl+Alt+Shift+O",
+          click: () => {
+            if (invisibleWindow) {
+              if (!invisibleWindow.isVisible()) {
+                showInvisibleWindow("menu:recording-output");
+              }
+              logEvent("recording", "Menu toggle output requested");
+              invisibleWindow.webContents.send("test-recording-output");
+              setTimeout(() => {
+                if (invisibleWindow && !invisibleWindow.isVisible()) {
+                  showInvisibleWindow("menu:recording-output-auto-recover");
+                }
+              }, 300);
             }
           },
         },
@@ -218,6 +476,7 @@ function createInvisibleWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
       preload: path.join(__dirname, "preload.js"),
     },
   });
@@ -239,10 +498,36 @@ function createInvisibleWindow() {
   invisibleWindow.loadFile("index.html");
 
   invisibleWindow.webContents.on('did-finish-load', () => {
+    logEvent("window", "did-finish-load", {
+      url: invisibleWindow.webContents.getURL(),
+    });
     if (hasDarkModeFlag) {
       invisibleWindow.webContents.send("toggle-dark-mode");
     }
   });
+
+  invisibleWindow.webContents.on("did-fail-load", (_, errorCode, errorDescription) => {
+    logEvent("window", "did-fail-load", { errorCode, errorDescription });
+  });
+
+  invisibleWindow.webContents.on("render-process-gone", (_, details) => {
+    logEvent("window", "render-process-gone", details);
+    if (!app.isQuitting) {
+      setTimeout(() => recreateInvisibleWindow("render-process-gone"), 150);
+    }
+  });
+
+  invisibleWindow.webContents.on(
+    "console-message",
+    (_, level, message, line, sourceId) => {
+      const important =
+        level <= 2 ||
+        /error|transcription|recording|hide|show|exception/i.test(message);
+      if (important) {
+        logEvent("renderer-console", message, { level, line, sourceId });
+      }
+    }
+  );
 
   // DevTools can be toggled manually with shortcuts defined in createMenuTemplate
 
@@ -253,9 +538,25 @@ function createInvisibleWindow() {
   invisibleWindow.on("close", (event) => {
     if (!app.isQuitting) {
       event.preventDefault();
-      invisibleWindow.hide();
+      hideInvisibleWindow("window:close-intercept");
     }
     return false;
+  });
+
+  invisibleWindow.on("show", () => {
+    logEvent("window", "show event");
+  });
+
+  invisibleWindow.on("hide", () => {
+    logEvent("window", "hide event");
+  });
+
+  invisibleWindow.on("focus", () => {
+    logEvent("window", "focus event");
+  });
+
+  invisibleWindow.on("blur", () => {
+    logEvent("window", "blur event");
   });
 
   // Set the menu for the invisible window
@@ -263,7 +564,7 @@ function createInvisibleWindow() {
   Menu.setApplicationMenu(menu);
 
   // Show window initially
-  invisibleWindow.showInactive();
+  showInvisibleWindow("startup");
 }
 
 function createSettingsWindow() {
@@ -281,6 +582,7 @@ function createSettingsWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
       preload: path.join(__dirname, "preload.js"),
     },
   });
@@ -308,10 +610,11 @@ function createSettingsWindow() {
 function registerShortcuts() {
   // Screenshot shortcut (Command/Ctrl + Shift + S)
   globalShortcut.register("CommandOrControl+Shift+S", async () => {
+    logEvent("shortcut", "Screenshot shortcut triggered");
     try {
       // Hide window before taking screenshot
       if (invisibleWindow && invisibleWindow.isVisible()) {
-        invisibleWindow.hide();
+        hideInvisibleWindow("shortcut:screenshot");
       }
 
       // Wait for window to hide
@@ -338,26 +641,54 @@ function registerShortcuts() {
 
       // Show window again after a brief delay
       setTimeout(() => {
-        if (invisibleWindow) {
-          invisibleWindow.showInactive();
-        }
+        showInvisibleWindow("shortcut:screenshot-post-capture");
       }, 200);
     } catch (error) {
       console.error("Screenshot failed:", error);
-      if (invisibleWindow) {
-        invisibleWindow.showInactive();
-      }
+      logEvent("shortcut", "Screenshot shortcut failed", {
+        message: error?.message,
+        stack: error?.stack,
+      });
+      showInvisibleWindow("shortcut:screenshot-error");
     }
   });
 
   // Toggle visibility shortcut (Command/Ctrl + Shift + H)
-  globalShortcut.register("CommandOrControl+Shift+H", () => {
+  const toggleVisibility = () => {
+    logEvent("shortcut", "Visibility shortcut triggered", {
+      currentlyVisible: invisibleWindow?.isVisible?.(),
+    });
     if (invisibleWindow.isVisible()) {
-      invisibleWindow.hide();
+      hideInvisibleWindow("shortcut:visibility-toggle");
     } else {
-      invisibleWindow.showInactive();
+      showInvisibleWindow("shortcut:visibility-toggle");
     }
-  });
+  };
+
+  const visibilityPrimary = "CommandOrControl+Shift+H";
+  const visibilityFallback = "CommandOrControl+Alt+Shift+H";
+  const visibilityRegistered = globalShortcut.register(
+    visibilityPrimary,
+    toggleVisibility
+  );
+  if (!visibilityRegistered) {
+    console.warn(
+      `[shortcuts] Could not register ${visibilityPrimary}. Trying fallback ${visibilityFallback}.`
+    );
+    const visibilityFallbackRegistered = globalShortcut.register(
+      visibilityFallback,
+      toggleVisibility
+    );
+    if (!visibilityFallbackRegistered) {
+      console.warn(
+        `[shortcuts] Could not register fallback ${visibilityFallback}. Visibility shortcut is unavailable.`
+      );
+    } else {
+      console.log(
+        `[shortcuts] Registered visibility shortcut: ${visibilityFallback}`
+      );
+    }
+  }
 
   // Test response shortcut (Command/Ctrl + Shift + T)
   globalShortcut.register("CommandOrControl+Shift+T", async () => {
@@ -369,6 +700,37 @@ function registerShortcuts() {
       } catch (error) {
         console.error("Failed to test response:", error);
       }
+    }
+  });
+
+  // Recording shortcuts
+  globalShortcut.register("CommandOrControl+Alt+Shift+I", () => {
+    if (invisibleWindow) {
+      if (!invisibleWindow.isVisible()) {
+        showInvisibleWindow("shortcut:recording-input-pre");
+      }
+      logEvent("recording", "Shortcut toggle input requested");
+      invisibleWindow.webContents.send("test-recording-input");
+      setTimeout(() => {
+        if (invisibleWindow && !invisibleWindow.isVisible()) {
+          showInvisibleWindow("shortcut:recording-input-auto-recover");
+        }
+      }, 300);
+    }
+  });
+
+  globalShortcut.register("CommandOrControl+Alt+Shift+O", () => {
+    if (invisibleWindow) {
+      if (!invisibleWindow.isVisible()) {
+        showInvisibleWindow("shortcut:recording-output-pre");
+      }
+      logEvent("recording", "Shortcut toggle output requested");
+      invisibleWindow.webContents.send("test-recording-output");
+      setTimeout(() => {
+        if (invisibleWindow && !invisibleWindow.isVisible()) {
+          showInvisibleWindow("shortcut:recording-output-auto-recover");
+        }
+      }, 300);
     }
   });
 
@@ -439,6 +801,34 @@ function registerShortcuts() {
     }
   });
 
+  // Dark mode shortcut. Ctrl/Cmd + Shift + D may be taken by other apps,
+  // so we register a fallback combination if the primary accelerator is unavailable.
+  const toggleDarkMode = () => {
+    if (invisibleWindow) {
+      invisibleWindow.webContents.send("toggle-dark-mode");
+    }
+  };
+
+  const darkModePrimary = "CommandOrControl+Shift+D";
+  const darkModeFallback = "CommandOrControl+Alt+Shift+D";
+  const darkModeRegistered = globalShortcut.register(darkModePrimary, toggleDarkMode);
+  if (!darkModeRegistered) {
+    console.warn(
+      `[shortcuts] Could not register ${darkModePrimary}. Trying fallback ${darkModeFallback}.`
+    );
+    const darkModeFallbackRegistered = globalShortcut.register(
+      darkModeFallback,
+      toggleDarkMode
+    );
+    if (!darkModeFallbackRegistered) {
+      console.warn(
+        `[shortcuts] Could not register fallback ${darkModeFallback}. Dark mode shortcut is unavailable.`
+      );
+    } else {
+      console.log(`[shortcuts] Registered dark mode shortcut: ${darkModeFallback}`);
+    }
+  }
+
   // Settings shortcut (Command/Ctrl + ,)
   globalShortcut.register("CommandOrControl+,", () => {
     createSettingsWindow();
@@ -476,12 +866,16 @@ function registerShortcuts() {
 
 // When app is ready
 app.whenReady().then(async () => {
+  initializeLogger();
+  logEvent("app", "App ready", { argv: process.argv });
+
   // Load API key from config before initializing services
   const apiKey = config.getOpenAIKey();
   if (apiKey) {
     process.env.OPENAI_API_KEY = apiKey;
   }
 
+  configureDisplayMediaCapture();
   createInvisibleWindow();
   registerShortcuts();
   await initializeLLMService();
@@ -490,8 +884,8 @@ app.whenReady().then(async () => {
   if (process.platform === "win32") {
     tray = new Tray(path.join(__dirname, "../assets/OCTO.png"));
     const contextMenu = Menu.buildFromTemplate([
-      { label: "Show", click: () => invisibleWindow.show() },
-      { label: "Hide", click: () => invisibleWindow.hide() },
+      { label: "Show", click: () => showInvisibleWindow("tray:show") },
+      { label: "Hide", click: () => hideInvisibleWindow("tray:hide") },
       { type: "separator" },
       { label: "Quit", click: () => app.quit() },
     ]);
@@ -501,13 +895,20 @@ app.whenReady().then(async () => {
 
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) {
+      logEvent("app", "activate with no windows; recreating invisible window");
       createInvisibleWindow();
+    } else {
+      showInvisibleWindow("app:activate");
     }
   });
 });
 
 // Quit when all windows are closed.
 app.on("window-all-closed", function () {
+  if (isRecoveringRendererWindow) {
+    logEvent("app", "window-all-closed ignored during renderer recovery");
+    return;
+  }
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -515,6 +916,7 @@ app.on("window-all-closed", function () {
 
 // Clean up on app quit
 app.on("before-quit", () => {
+  logEvent("app", "before-quit");
   app.isQuitting = true;
   globalShortcut.unregisterAll();
 });

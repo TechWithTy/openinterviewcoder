@@ -88,6 +88,7 @@ The built applications will be available in the `dist` directory.
 
    - `Cmd/Ctrl + Shift + S`: Take a screenshot
    - `Cmd/Ctrl + Shift + H`: Toggle assistant visibility
+   - `Cmd/Ctrl + Shift + D`: Toggle dark mode (fallback: `Cmd/Ctrl + Alt + Shift + D`)
    - `Cmd/Ctrl + ←/→/↑/↓`: Move the assistant window
    - `Cmd + ,`: Open settings
 

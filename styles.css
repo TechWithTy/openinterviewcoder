@@ -81,6 +81,21 @@ body.dark-mode #invisible-container {
   color: rgba(255, 255, 255, 0.9);
 }
 
+.message.transcription.live {
+  border-left: 2px solid rgba(125, 211, 252, 0.7);
+}
+
+.transcription-live-cursor {
+  opacity: 0.75;
+  animation: transcriptionCursorBlink 1s step-end infinite;
+}
+
+@keyframes transcriptionCursorBlink {
+  50% {
+    opacity: 0.15;
+  }
+}
+
 body.dark-mode .message.user {
   background: rgba(255, 255, 255, 0.1);
 }

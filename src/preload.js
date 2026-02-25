@@ -1,4 +1,31 @@
 const { contextBridge, ipcRenderer, shell } = require("electron");
+const path = require("path");
+
+let transcriptionService = null;
+let transcriptionServiceLoadError = null;
+
+function getTranscriptionService() {
+  if (transcriptionService) {
+    return transcriptionService;
+  }
+
+  if (transcriptionServiceLoadError) {
+    throw transcriptionServiceLoadError;
+  }
+
+  const transcriptionServicePath = path.join(__dirname, "transcription-service.js");
+  try {
+    transcriptionService = require(transcriptionServicePath);
+    return transcriptionService;
+  } catch (error) {
+    const wrappedError = new Error(
+      `Transcription service failed to load from ${transcriptionServicePath}: ${error.message}`
+    );
+    wrappedError.cause = error;
+    transcriptionServiceLoadError = wrappedError;
+    throw wrappedError;
+  }
+}
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -15,6 +42,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Window controls
   minimizeWindow: () => ipcRenderer.invoke("minimize-window"),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
+  showWindow: () => ipcRenderer.invoke("show-window"),
 
   // Context menu
   buildContextMenu: () => ipcRenderer.invoke("build-context-menu"),
@@ -50,13 +78,35 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onScrollChat: (callback) =>
     ipcRenderer.on("scroll-chat", (event, direction) => callback(direction)),
 
+  // Debugging
+  debugLog: (payload) => ipcRenderer.invoke("debug-log", payload),
+  getDebugLogPath: () => ipcRenderer.invoke("get-debug-log-path"),
+
   // Click-through mode
   onToggleMouseIgnore: (callback) =>
     ipcRenderer.on("toggle-mouse-ignore", (event, value) => callback(value)),
 
+  // Recording tests
+  onTestRecordingInput: (callback) =>
+    ipcRenderer.on("test-recording-input", () => callback()),
+  onTestRecordingOutput: (callback) =>
+    ipcRenderer.on("test-recording-output", () => callback()),
+
   // Dark mode
   onToggleDarkMode: (callback) =>
     ipcRenderer.on("toggle-dark-mode", (event) => callback()),
+
+  // Transcription
+  startTranscription: (stream, config, type, callback) => {
+    const transcriptionService = getTranscriptionService();
+    return transcriptionService.startTranscription(stream, config, type, callback);
+  },
+  stopTranscription: (type) => {
+    const transcriptionService = getTranscriptionService();
+    return transcriptionService.stopTranscription(type);
+  },
+  processTranscription: (text) => ipcRenderer.invoke("process-transcription", text),
+  transcribeAudioChunk: (payload) => ipcRenderer.invoke("transcribe-audio-chunk", payload),
 });
 
 // No need for additional electron context bridge since we're handling everything through electronAPI
