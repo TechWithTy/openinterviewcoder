@@ -170,6 +170,14 @@
         </div>
 
         <div class="setting-item">
+          <label class="setting-label">Render Assistant HTML</label>
+          <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="renderAssistantHtmlCheck" style="width: auto;" />
+            <span style="color: #cbd5e1; font-size: 14px;">Enable Markdown/HTML rendering for assistant responses. Off by default so JSX and code stay raw.</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
           <label class="setting-label">Auto-detect Input Device</label>
           <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="autoDetectInputCheck" style="width: auto;" checked />
@@ -234,6 +242,10 @@
               <option value="custom">Custom Prompt</option>
               <option value="default">Default: General Insights</option>
               <option value="hackerrank">HackerRank: Coding Interview (Analyze Left Side)</option>
+              <option value="hackerrank-frontend">HackerRank: Frontend Coding Interview</option>
+              <option value="hackerrank-frontend-v2">HackerRank: Frontend Coding Interview v2</option>
+              <option value="hackerrank-frontend-v3">HackerRank: Frontend Coding Interview v3</option>
+              <option value="hackerrank-frontend-v4">HackerRank: Frontend Coding Interview v4</option>
               <option value="debug">Code Review: Finding Bugs</option>
             </select>
             <textarea

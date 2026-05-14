@@ -29,6 +29,71 @@ Format your responses in sections:
 
 let isInitialized = false;
 
+function shouldPrioritizeLeftPane(prompt) {
+  const normalized = String(prompt || "").toLowerCase();
+  return (
+    normalized.includes("hackerrank") ||
+    normalized.includes("left side") ||
+    normalized.includes("left pane") ||
+    normalized.includes("frontend coding interview")
+  );
+}
+
+function shouldCaptureEditorPane(prompt) {
+  const normalized = String(prompt || "").toLowerCase();
+  return (
+    normalized.includes("middle/editor pane") ||
+    normalized.includes("current candidate code") ||
+    normalized.includes("jsx scaffold") ||
+    normalized.includes("full final jsx") ||
+    normalized.includes("multiple jsx tabs") ||
+    normalized.includes("two files")
+  );
+}
+
+function shouldCaptureDebugPane(prompt) {
+  const normalized = String(prompt || "").toLowerCase();
+  return (
+    normalized.includes("red text") ||
+    normalized.includes("debugging") ||
+    normalized.includes("error output") ||
+    normalized.includes("right side of the window") ||
+    normalized.includes("failing test")
+  );
+}
+
+function buildPaneCrop(base64Image, xRatio, widthRatio) {
+  try {
+    const { nativeImage } = require("electron");
+    const sourceImage = nativeImage.createFromBuffer(Buffer.from(base64Image, "base64"));
+    if (sourceImage.isEmpty()) {
+      return null;
+    }
+
+    const { width, height } = sourceImage.getSize();
+    if (!width || !height) {
+      return null;
+    }
+
+    const cropX = Math.max(0, Math.min(width - 1, Math.floor(width * xRatio)));
+    const cropWidth = Math.max(
+      1,
+      Math.min(width - cropX, Math.floor(width * widthRatio))
+    );
+    const croppedImage = sourceImage.crop({
+      x: cropX,
+      y: 0,
+      width: cropWidth,
+      height,
+    });
+
+    return croppedImage.isEmpty() ? null : croppedImage.toPNG().toString("base64");
+  } catch (error) {
+    console.warn("Failed to build pane crop:", error.message);
+    return null;
+  }
+}
+
 function mimeTypeToFilename(mimeType) {
   if (!mimeType) return "chunk.webm";
   if (mimeType.includes("ogg")) return "chunk.ogg";
@@ -163,10 +228,74 @@ async function makeLLMRequest(event, data) {
   }
 
   let extractedTextContext = "";
+  const prioritizeLeftPane = shouldPrioritizeLeftPane(prompt);
+  const captureEditorPane = shouldCaptureEditorPane(prompt);
+  const captureDebugPane = shouldCaptureDebugPane(prompt);
+  const leftPaneCropBase64 =
+    base64Image && prioritizeLeftPane ? buildPaneCrop(base64Image, 0, 0.58) : null;
+  const editorPaneCropBase64 =
+    base64Image && captureEditorPane ? buildPaneCrop(base64Image, 0.38, 0.36) : null;
+  const debugPaneCropBase64 =
+    base64Image && captureDebugPane ? buildPaneCrop(base64Image, 0.72, 0.28) : null;
 
   if (base64Image && useTwoStep) {
     // 1. Two-Step Pipeline: Extraction using a vision model.
     try {
+      const extractionInstructions = captureDebugPane
+        ? "This is a HackerRank-style frontend coding interview screenshot. Extract three kinds of context: (1) the problem statement, requirements, examples, and constraints from the left pane, (2) the current JSX, starter code, component structure, props, function names, exports, and any visible file tabs or multi-file relationships from the middle editor pane, and (3) debugging evidence from the right pane such as red text, failing tests, stack traces, console errors, assertion messages, mismatch output, and runtime warnings. If multiple editor tabs or filenames are visible, identify each visible file and capture the code or role of each file separately. Use the full screenshot only to fill in gaps or verify layout relationships."
+        : captureEditorPane
+          ? "This is a HackerRank-style frontend coding interview screenshot. Extract two kinds of context: (1) the problem statement, requirements, examples, and constraints from the left pane, and (2) the current JSX, starter code, component structure, props, function names, exports, and any visible file tabs or multi-file relationships from the middle editor pane. If multiple editor tabs or filenames are visible, identify each visible file and capture the code or role of each file separately. Use the full screenshot only to fill in gaps or verify layout relationships."
+        : prioritizeLeftPane
+          ? "This is a coding interview screenshot. Prioritize the problem statement in the left pane or left half of the layout. If multiple panes are visible, treat the left-focused crop as the primary source of truth and use the full screenshot only for missing context."
+          : "Extract all text and code from this image as accurately as possible, preserving the formatting.";
+
+      const extractionContent = [
+        {
+          type: "text",
+          text: captureDebugPane
+            ? "Please extract the left-pane problem statement, the middle-pane JSX/editor code, and the right-pane debugging output separately. If the editor shows multiple visible tabs or filenames, list each visible file and the code or responsibility associated with it. For the right pane, capture red text, failing assertions, expected vs actual output, runtime errors, console errors, and stack traces whenever visible."
+            : captureEditorPane
+              ? "Please extract the left-pane problem statement and the middle-pane JSX/editor code separately. Include starter code details, required component names, props, helper functions, export shape, and any visible tab names or filenames. If multiple files appear relevant, separate them clearly."
+              : prioritizeLeftPane
+                ? "Please extract the coding problem from the left pane first. Prefer the left-focused crop, then use the full screenshot only to fill any gaps."
+                : "Please extract all text and code.",
+        },
+      ];
+
+      if (leftPaneCropBase64) {
+        extractionContent.push({
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${leftPaneCropBase64}`
+          }
+        });
+      }
+
+      if (editorPaneCropBase64) {
+        extractionContent.push({
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${editorPaneCropBase64}`
+          }
+        });
+      }
+
+      if (debugPaneCropBase64) {
+        extractionContent.push({
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${debugPaneCropBase64}`
+          }
+        });
+      }
+
+      extractionContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${base64Image}`
+        }
+      });
+
       const extractResponse = await axios({
         method: "post",
         url: "https://api.openai.com/v1/chat/completions",
@@ -179,19 +308,11 @@ async function makeLLMRequest(event, data) {
           messages: [
             {
               role: "system",
-              content: "You are a specialized OCR and layout extraction assistant. Extract all text and code from this image as accurately as possible, preserving the formatting.",
+              content: `You are a specialized OCR and layout extraction assistant. ${extractionInstructions}`,
             },
             {
               role: "user",
-              content: [
-                { type: "text", text: "Please extract all text and code." },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/png;base64,${base64Image}`
-                  }
-                }
-              ]
+              content: extractionContent
             }
           ],
           max_tokens: 2000,
@@ -208,7 +329,14 @@ async function makeLLMRequest(event, data) {
 
   let messages = [];
 
-  const finalPrompt = prompt + extractedTextContext;
+  const focusPrefix = captureDebugPane
+    ? "\n\nImportant image-handling instruction: use the left pane for the problem statement and requirements, the middle/editor pane for the current JSX and starter code, and the right pane for debugging evidence such as red text, failing tests, assertion messages, console errors, and stack traces. If multiple editor tabs or files are visible, consider all relevant files together before producing the final answer. If the right pane shows concrete failure output, use it to diagnose and correct the final solution."
+    : captureEditorPane
+      ? "\n\nImportant image-handling instruction: use the left pane for the problem statement and requirements, and use the middle/editor pane for the current JSX, starter code, component shape, required exports, and any visible additional file tabs. Combine all relevant visible files before producing the final answer."
+      : prioritizeLeftPane
+      ? "\n\nImportant image-handling instruction: prioritize the coding problem shown in the left pane/left half of the screenshot. Ignore the center or right pane unless it is needed to complete missing context."
+      : "";
+  const finalPrompt = prompt + focusPrefix + extractedTextContext;
 
   if (isOModel) {
     messages.push({
@@ -232,6 +360,33 @@ async function makeLLMRequest(event, data) {
 
   if (base64Image && !useTwoStep) {
     // If we're not using two-step, but an image is provided:
+    if (leftPaneCropBase64) {
+      messages[messages.length - 1].content.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${leftPaneCropBase64}`
+        }
+      });
+    }
+
+    if (editorPaneCropBase64) {
+      messages[messages.length - 1].content.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${editorPaneCropBase64}`
+        }
+      });
+    }
+
+    if (debugPaneCropBase64) {
+      messages[messages.length - 1].content.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${debugPaneCropBase64}`
+        }
+      });
+    }
+
     messages[messages.length - 1].content.push({
       type: "image_url",
       image_url: {
@@ -252,16 +407,44 @@ async function makeLLMRequest(event, data) {
         {
           role: "user",
           content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/png;base64,${base64Image}`
-              }
-            }
+            { type: "text", text: finalPrompt },
           ]
         }
       ];
+
+      if (leftPaneCropBase64) {
+        messages[1].content.push({
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${leftPaneCropBase64}`
+          }
+        });
+      }
+
+      if (editorPaneCropBase64) {
+        messages[1].content.push({
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${editorPaneCropBase64}`
+          }
+        });
+      }
+
+      if (debugPaneCropBase64) {
+        messages[1].content.push({
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${debugPaneCropBase64}`
+          }
+        });
+      }
+
+      messages[1].content.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/png;base64,${base64Image}`
+        }
+      });
     }
   }
 

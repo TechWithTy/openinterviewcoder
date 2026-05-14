@@ -8,6 +8,7 @@ const store = new Store({
       model: "gpt-4o-mini",
       autoDetectInput: true,
       autoDetectOutput: true,
+      renderAssistantHtml: false,
       transcriptionPauseMs: 2500,
       inputDeviceId: "default",
       outputDeviceId: "default",
@@ -33,6 +34,8 @@ module.exports = {
   setAutoDetectInput: (val) => store.set("openai.autoDetectInput", val),
   getAutoDetectOutput: () => store.get("openai.autoDetectOutput") ?? true,
   setAutoDetectOutput: (val) => store.set("openai.autoDetectOutput", val),
+  getRenderAssistantHtml: () => store.get("openai.renderAssistantHtml") ?? false,
+  setRenderAssistantHtml: (val) => store.set("openai.renderAssistantHtml", Boolean(val)),
   getTranscriptionPauseMs: () => {
     const value = Number(store.get("openai.transcriptionPauseMs"));
     if (!Number.isFinite(value)) return 2500;

@@ -40,6 +40,94 @@ const PREDEFINED_PROMPTS = {
     </steps>
   </task>
 </poml>`,
+  "hackerrank-frontend": `<poml version="3.0">
+  <role>Expert real-time interview copilot for frontend coding interviews</role>
+  <task>
+    Analyze the frontend coding interview problem (typically on the left side of the screenshot). Produce a production-grade, interview-ready solution using the most appropriate frontend language and framework from the prompt context.
+    <steps>
+      <step>State the problem, inputs, outputs, constraints, UI behaviors, and any browser or state-management assumptions. If the prompt is ambiguous, state the most likely assumption briefly.</step>
+      <step>Determine the best solution strategy and explain the key trade-offs, including component structure, state flow, rendering approach, accessibility, and performance implications when relevant.</step>
+      <step>Write clean, robust, and commented code that solves the problem. Prefer JavaScript/TypeScript and React when the prompt is frontend/UI-oriented unless the prompt explicitly requires another stack.</step>
+      <step>For UI problems, include the minimal supporting markup, styles, and event handling needed to make the solution complete and practical in a HackerRank environment.</step>
+      <step>Call out edge cases, accessibility concerns, browser pitfalls, and test scenarios.</step>
+      <step>Explicitly state Time and Space Complexity where applicable, and note when the dominant concern is rendering, event frequency, or network latency rather than algorithmic complexity.</step>
+      <step>Suggest likely interviewer follow-ups and briefly answer them at a Staff/Lead-level, connecting implementation choices to scalability, maintainability, and user experience.</step>
+    </steps>
+  </task>
+</poml>`,
+  "hackerrank-frontend-v2": `<poml version="3.0">
+  <role>Expert real-time interview copilot for frontend coding interviews</role>
+  <task>
+    Analyze this HackerRank-style frontend interview layout carefully.
+    <steps>
+      <step>Treat the left pane as the source of truth for the problem statement, requirements, constraints, and examples.</step>
+      <step>Treat the middle/editor pane as the current candidate code or JSX scaffold. Read it to understand the expected file shape, props, component names, starter code, and submission format.</step>
+      <step>Produce a complete solution, not partial guidance. Output the full final JSX/TSX/JavaScript code needed for the answer, including the functional logic, event handling, state updates, helper functions, and minimal supporting structure required by the prompt.</step>
+      <step>If the problem is React-based, return the full component implementation that could replace the starter code directly. Preserve required function names, props, and exported symbols when visible in the editor pane.</step>
+      <step>If styling is required to make the solution complete, include the necessary CSS or inline styles only to the extent required by the prompt. Do not omit runnable UI details when they are part of the task.</step>
+      <step>Briefly state assumptions only when the screenshot is ambiguous. Otherwise, commit to the most likely intended solution.</step>
+      <step>After the code, include a short explanation covering approach, edge cases, accessibility concerns, and performance trade-offs when relevant.</step>
+      <step>Explicitly state Time and Space Complexity where applicable.</step>
+      <step>Do not just describe the fix. Return the final complete solution first.</step>
+    </steps>
+  </task>
+</poml>`,
+  "hackerrank-frontend-v3": `<poml version="3.0">
+  <role>Expert real-time interview copilot for frontend coding interviews</role>
+  <task>
+    Analyze this HackerRank-style frontend interview layout and return a submission-ready final answer.
+    <steps>
+      <step>Use the left pane as the source of truth for the problem statement, examples, constraints, and expected behavior.</step>
+      <step>Use the middle/editor pane to recover the exact starter code shape, file structure, component names, props, helper names, export requirements, and any visible file tabs. If multiple JSX/TSX/JS files are visible or implied, consider them together as one solution context.</step>
+      <step>Check the right side of the window for debugging evidence such as red text, failing test output, assertion messages, runtime errors, console errors, warnings, stack traces, or expected-vs-actual diffs. If present, use that evidence to diagnose what is broken and correct the final solution.</step>
+      <step>Return the full final code first, with no omissions. Do not return fragments, diffs, placeholders, partial patches, or instructions like "render &lt;Articles articles={articles} /&gt; here". If a parent component, child component, wrapper JSX, effect, handler, import, export, or helper is needed, include it in the final answer.</step>
+      <step>Assume the candidate wants a copy-pasteable final submission that fully replaces the starter solution. Preserve visible required names and signatures from the editor pane.</step>
+      <step>If the task is React-based, output the complete working JSX/TSX/JavaScript solution including all required rendering logic, state management, event handlers, derived values, conditionals, list rendering, and minimal necessary styling hooks.</step>
+      <step>If the solution depends on multiple files, output each file completely and label them clearly by filename or role. Do not collapse a multi-file solution into one incomplete snippet.</step>
+      <step>Account for HackerRank test timing: many tests inspect the DOM immediately after render and do not wait for useEffect. Prefer deriving the initial rendered output synchronously from props/data during render or state initialization when possible, instead of relying on useEffect for first-paint content.</step>
+      <step>When child components are needed, define them fully. When container wiring is needed, include it fully. Never omit the top-level return tree.</step>
+      <step>After the code, include a short verification section listing edge cases checked, accessibility considerations, and any assumptions made only if the screenshot is ambiguous.</step>
+      <step>Explicitly state Time and Space Complexity where applicable.</step>
+      <step>Prioritize completeness and correctness over brevity.</step>
+    </steps>
+  </task>
+</poml>`,
+  "hackerrank-frontend-v4": `<poml version="3.0">
+  <role>Expert real-time interview copilot for frontend coding interviews</role>
+  <task>
+    Analyze this HackerRank-style frontend interview layout and return a submission-ready final answer.
+    <steps>
+      <step>Use the left pane as the source of truth for the problem statement, examples, constraints, expected behavior, and likely test intent.</step>
+      <step>Use the editor area as the source of truth for implementation details. Inspect all visible editor tabs or files, not just the focused tab. Recover the exact starter code shape, file structure, file names, component names, props, helper names, imports, exports, and required signatures.</step>
+      <step>If multiple code tabs are visible, first build a mental file manifest: identify each visible file or tab, determine entry points and child components, track import and export relationships, and preserve visible module boundaries unless the environment clearly requires combining files.</step>
+      <step>Check the right side of the window for debugging evidence such as red text, failing test output, assertion messages, runtime errors, console errors, warnings, stack traces, or expected-vs-actual diffs. If present, use that evidence to diagnose what is broken and correct the final solution.</step>
+      <step>Return the full final code first, with no omissions. Do not return fragments, diffs, placeholders, pseudo-code, or instructions like "render &lt;Articles articles={articles} /&gt; here". If a parent component, child component, wrapper JSX, effect, handler, import, export, helper, or style hook is needed, include it in the final answer.</step>
+      <step>If the solution spans multiple files, output each required file as a separate labeled code block using visible filenames when available, for example: "// File: src/App.js". If only one file truly needs to change, return only that file.</step>
+      <step>Assume the candidate wants a copy-pasteable final submission that fully replaces the starter solution. Preserve visible required names and signatures from the editor panes.</step>
+      <step>If the task is React-based, output the complete working JSX, TSX, or JavaScript solution including all required rendering logic, state management, event handlers, derived values, conditionals, list rendering, and minimal necessary styling hooks.</step>
+      <step>Account for HackerRank test timing: many tests inspect the DOM immediately after render and do not wait for useEffect. Prefer deriving the initial rendered output synchronously from props or data during render or state initialization when possible, instead of relying on useEffect for first-paint content.</step>
+      <step>When child components are needed, define them fully. When container wiring is needed, include it fully. Never omit the top-level return tree. Never assume a child component is already correct if the screenshot shows it is hardcoded, incomplete, or test-sensitive.</step>
+      <step>If some tabs are not visible but the screenshot clearly implies additional files exist, infer the minimal missing code required to make the shown files work, but do not invent unnecessary abstractions.</step>
+      <step>Preserve test-sensitive details exactly when visible, including data-testid attributes, component names, export style, function signatures, and DOM structure when tests are likely querying specific positions or repeated elements.</step>
+      <step>After the code, include a short verification section listing which files were updated, edge cases checked, accessibility considerations, and assumptions made only if the screenshot is ambiguous.</step>
+      <step>Explicitly state Time and Space Complexity where applicable.</step>
+      <step>Prioritize completeness and correctness over brevity.</step>
+    </steps>
+  </task>
+</poml>`,
+  "systems-and-algorithms": `<poml version="3.0">
+  <role>Expert Systems Architect & Algorithms Engineer</role>
+  <task>
+    Analyze the systems design or algorithmic problem presented. Provide a comprehensive architectural and algorithmic solution that includes clear diagrams and structured decision-making.
+    <steps>
+      <step>State the core problem, functional requirements, and non-functional requirements (e.g., scale, latency, consistency).</step>
+      <step>Outline the proposed high-level architecture. Draw and showcase architectural decisions using clear Mermaid.js diagrams (e.g., flowchart, sequence diagram, or system architecture diagram) to visualize the flow and components. YOU MUST wrap your Mermaid code in a markdown code block exactly like this: \`\`\`mermaid [your code] \`\`\`.</step>
+      <step>Detail the core algorithmic logic and data models required for the system. Explain the trade-offs of chosen algorithms, including Time and Space Complexity.</step>
+      <step>Discuss database choices, API design, caching strategies, and load balancing if applicable.</step>
+      <step>Identify potential bottlenecks and single points of failure, and explain how the architecture mitigates them.</step>
+    </steps>
+  </task>
+</poml>`,
   "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations."
 };
 
@@ -112,6 +200,11 @@ process.argv.forEach((arg) => {
     } else {
       config.setPrompt(templateName);
     }
+    
+    // Automatically turn on HTML rendering for systems-and-algorithms because it uses Mermaid diagrams
+    if (templateName === "systems-and-algorithms") {
+      config.setRenderAssistantHtml(true);
+    }
   }
 });
 
@@ -124,6 +217,7 @@ ipcMain.handle("get-settings", () => {
     twoStep: config.getTwoStep(),
     autoDetectInput: config.getAutoDetectInput(),
     autoDetectOutput: config.getAutoDetectOutput(),
+    renderAssistantHtml: config.getRenderAssistantHtml(),
     transcriptionPauseMs: config.getTranscriptionPauseMs(),
     inputDeviceId: config.getInputDeviceId(),
     outputDeviceId: config.getOutputDeviceId(),
@@ -158,6 +252,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   if (settings.autoDetectOutput !== undefined) {
     config.setAutoDetectOutput(settings.autoDetectOutput);
+  }
+  if (settings.renderAssistantHtml !== undefined) {
+    config.setRenderAssistantHtml(settings.renderAssistantHtml);
   }
   if (settings.transcriptionPauseMs !== undefined) {
     config.setTranscriptionPauseMs(settings.transcriptionPauseMs);
@@ -244,6 +341,7 @@ let settingsWindow = null;
 let tray = null;
 let lastRendererCrashAt = 0;
 let isRecoveringRendererWindow = false;
+let isTypingSessionModeEnabled = true;
 // GlobalShortcut does not expose keyup; use repeated keydown events while held
 // and release when that heartbeat stops.
 const HOLD_SHORTCUT_RELEASE_IDLE_MS = 800;
@@ -257,6 +355,48 @@ function showInvisibleWindow(reason) {
     });
     invisibleWindow.showInactive();
   }
+}
+
+function updateTypingSessionMode(enabled, reason) {
+  isTypingSessionModeEnabled = Boolean(enabled);
+  if (!invisibleWindow || invisibleWindow.isDestroyed()) {
+    return;
+  }
+
+  try {
+    invisibleWindow.setIgnoreMouseEvents(isTypingSessionModeEnabled);
+    invisibleWindow.webContents.isIgnoringMouseEvents = isTypingSessionModeEnabled;
+
+    if (typeof invisibleWindow.setFocusable === "function") {
+      invisibleWindow.setFocusable(!isTypingSessionModeEnabled);
+    }
+
+    if (isTypingSessionModeEnabled) {
+      invisibleWindow.blur();
+    } else {
+      showInvisibleWindow(reason);
+      invisibleWindow.focus();
+    }
+
+    sendRendererEvent("toggle-mouse-ignore", {
+      enabled: isTypingSessionModeEnabled,
+      reason,
+    });
+    logEvent("window", "Typing session mode updated", {
+      enabled: isTypingSessionModeEnabled,
+      reason,
+    });
+  } catch (error) {
+    logEvent("window", "Typing session mode update failed", {
+      enabled: isTypingSessionModeEnabled,
+      reason,
+      message: error?.message,
+    });
+  }
+}
+
+function toggleTypingSessionMode(reason) {
+  updateTypingSessionMode(!isTypingSessionModeEnabled, reason);
 }
 
 function hideInvisibleWindow(reason) {
@@ -561,6 +701,13 @@ function createMenuTemplate() {
             }
           },
         },
+        {
+          label: "Toggle Typing Session Mode",
+          accelerator: "CommandOrControl+Alt+Shift+T",
+          click: () => {
+            toggleTypingSessionMode("menu:typing-session-mode");
+          },
+        },
       ],
     },
     {
@@ -620,10 +767,6 @@ function createInvisibleWindow() {
 
   // Set content protection to prevent screen capture
   invisibleWindow.setContentProtection(true);
-
-  // Always ignore mouse events to prevent interaction with screen sharing
-  invisibleWindow.setIgnoreMouseEvents(true);
-  invisibleWindow.webContents.isIgnoringMouseEvents = true;
 
   invisibleWindow.loadFile("index.html");
 
@@ -692,6 +835,7 @@ function createInvisibleWindow() {
   // Set the menu for the invisible window
   const menu = Menu.buildFromTemplate(createMenuTemplate());
   Menu.setApplicationMenu(menu);
+  updateTypingSessionMode(isTypingSessionModeEnabled, "window:init");
 
   // Show window initially
   showInvisibleWindow("startup");
@@ -831,6 +975,13 @@ function registerShortcuts() {
         console.error("Failed to test response:", error);
       }
     }
+  });
+
+  globalShortcut.register("CommandOrControl+Alt+Shift+T", () => {
+    logEvent("shortcut", "Typing session mode toggle requested", {
+      enabledBefore: isTypingSessionModeEnabled,
+    });
+    toggleTypingSessionMode("shortcut:typing-session-mode");
   });
 
   // Recording shortcuts

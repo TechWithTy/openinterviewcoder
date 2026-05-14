@@ -138,6 +138,16 @@ body.dark-mode .message.assistant {
   margin: 6px 0;
 }
 
+.message-content.raw-code {
+  white-space: pre-wrap;
+  font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  padding: 16px;
+}
+
 /* Animations */
 @keyframes messageAppear {
   from {

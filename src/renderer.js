@@ -5,6 +5,8 @@ const typingIndicator = document.getElementById("typing-indicator");
 // Chat state
 let messages = [];
 let isHelpOverlayOpen = false;
+let isTypingSessionModeEnabled = true;
+let renderAssistantHtml = false;
 let transcriptionPauseMs = 2500;
 const transcriptionProcessing = {
   Input: {
@@ -67,6 +69,106 @@ function getErrorDetails(error) {
     stack: error?.stack,
     fallback,
   };
+}
+
+function looksLikeRawCodeResponse(content) {
+  if (!content || typeof content !== "string") {
+    return false;
+  }
+
+  if (content.includes("```")) {
+    return false;
+  }
+
+  const trimmed = content.trim();
+  const leadingSlice = trimmed.slice(0, 1200);
+  const codeSignals = [
+    /^\/\/ File:/m,
+    /^import\s.+from\s+['"]/m,
+    /^export\s+(default\s+)?/m,
+    /^const\s+[A-Z][A-Za-z0-9_]*\s*=\s*\(/m,
+    /^function\s+[A-Z][A-Za-z0-9_]*\s*\(/m,
+    /return\s*\(\s*</m,
+    /<[A-Z][A-Za-z0-9]*(\s|>)/m,
+    /data-testid=/m,
+  ];
+
+  const signalCount = codeSignals.reduce(
+    (count, pattern) => count + (pattern.test(leadingSlice) ? 1 : 0),
+    0
+  );
+
+  return signalCount >= 2;
+}
+
+function renderAssistantContent(contentWrapper, content, isComplete = false) {
+  if (!contentWrapper) {
+    return;
+  }
+
+  if (!content || typeof content !== "string") {
+    contentWrapper.innerHTML = "";
+    return;
+  }
+
+  const hasMermaid = content.includes("```mermaid") || content.includes("mermaid");
+  
+  if ((!renderAssistantHtml && !hasMermaid) || looksLikeRawCodeResponse(content)) {
+    contentWrapper.classList.add("raw-code");
+    contentWrapper.textContent = content;
+    return;
+  }
+
+  contentWrapper.classList.remove("raw-code");
+  contentWrapper.innerHTML = marked.parse(content);
+
+  if (isComplete) {
+    console.log("Raw assistant content contains mermaid?", content.includes("mermaid"));
+    console.log("Raw content start:", content.slice(0, 500));
+    console.log("Parsed HTML contains language-mermaid?", contentWrapper.innerHTML.includes("language-mermaid"));
+    console.log("Parsed HTML start:", contentWrapper.innerHTML.slice(0, 500));
+    
+    if (typeof mermaid !== "undefined") {
+      // Resilient fallback: if the AI forgot the language-mermaid tag, check all code blocks
+      const allCodeBlocks = contentWrapper.querySelectorAll("code");
+      allCodeBlocks.forEach((block) => {
+        const text = block.textContent.trim();
+        if (text.startsWith("graph ") || text.startsWith("flowchart ") || 
+            text.startsWith("sequenceDiagram") || text.startsWith("classDiagram") || 
+            text.startsWith("stateDiagram") || text.startsWith("erDiagram") || 
+            text.startsWith("gantt") || text.startsWith("pie")) {
+          block.classList.add("mermaid");
+        }
+      });
+
+      const mermaidBlocks = contentWrapper.querySelectorAll("code.language-mermaid, code.mermaid, .mermaid, mermaid");
+      console.log("Found mermaid blocks length:", mermaidBlocks.length);
+      
+      if (mermaidBlocks.length > 0) {
+        mermaidBlocks.forEach((block) => {
+          let pre = block.parentElement;
+          if (pre && pre.tagName !== 'PRE') pre = block; // handle if not in PRE
+          const graphDefinition = block.textContent;
+          const container = document.createElement('div');
+          container.className = 'mermaid';
+          // Assign textContent so Mermaid can parse the raw definition properly
+          container.textContent = graphDefinition;
+          if (pre.parentNode) {
+            pre.parentNode.replaceChild(container, pre);
+          }
+        });
+        try {
+          // Init processes all nodes with the 'mermaid' class and replaces them with SVG
+          mermaid.init(undefined, contentWrapper.querySelectorAll('.mermaid'));
+          console.log("Mermaid init executed successfully");
+        } catch (e) {
+          console.warn("Mermaid init error:", e);
+        }
+      }
+    } else {
+      console.warn("Mermaid is undefined during isComplete!");
+    }
+  }
 }
 
 function normalizeTranscriptionPauseMs(value) {
@@ -169,6 +271,9 @@ function ensureLiveTranscriptionMessage(source) {
   state.messageEl = messageEl;
   state.transcriptSpan = transcriptSpan;
   state.cursorSpan = cursorSpan;
+  
+  updateNullStateVisibility();
+  
   return state;
 }
 
@@ -219,14 +324,23 @@ if (typeof marked === "undefined") {
   });
 }
 
+// Initialize mermaid
+if (typeof mermaid !== "undefined") {
+  mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+} else {
+  console.error("mermaid library not loaded");
+}
+
 // Initialize the UI
 document.addEventListener("DOMContentLoaded", async () => {
   debugLog("Renderer DOMContentLoaded");
   try {
     const settings = await getElectronAPI().getSettings();
     transcriptionPauseMs = normalizeTranscriptionPauseMs(settings?.transcriptionPauseMs);
+    renderAssistantHtml = Boolean(settings?.renderAssistantHtml);
   } catch {
     transcriptionPauseMs = 2500;
+    renderAssistantHtml = false;
   }
   setupEventListeners();
 });
@@ -283,6 +397,20 @@ function setupEventListeners() {
   // Handle dark mode toggle
   electronAPI.onToggleDarkMode(() => {
     document.body.classList.toggle("dark-mode");
+  });
+  electronAPI.onToggleMouseIgnore?.((payload) => {
+    const enabled =
+      typeof payload === "object" ? Boolean(payload.enabled) : Boolean(payload);
+    isTypingSessionModeEnabled = enabled;
+    document.body.setAttribute(
+      "data-typing-session-mode",
+      enabled ? "enabled" : "disabled"
+    );
+    addAssistantInfoMessage(
+      enabled
+        ? "Typing session mode enabled. The overlay is click-through so you can type in the underlying session."
+        : "Typing session mode disabled. The overlay is interactive and can capture focus."
+    );
   });
   electronAPI.onToggleHelp?.(() => {
     toggleHelpOverlay();
@@ -601,11 +729,7 @@ function updateMessage(data) {
   // Update content
   const contentWrapper = messageEl.querySelector(".message-content");
   if (contentWrapper) {
-    if (content && typeof content === "string") {
-      contentWrapper.innerHTML = marked.parse(content);
-    } else {
-      contentWrapper.innerHTML = ""; // Clear content if it's null/undefined or not a string
-    }
+    renderAssistantContent(contentWrapper, content, isComplete);
     messageEl.style.display = "block"; // Show when content is added
     scrollToBottom();
   }
@@ -733,7 +857,8 @@ function resetChat() {
 function updateNullStateVisibility() {
   const nullState = document.getElementById("null-state");
   if (nullState) {
-    const shouldShow = messages.length === 0 || isHelpOverlayOpen;
+    const hasContent = chatHistory.children.length > 0 || messages.length > 0;
+    const shouldShow = !hasContent || isHelpOverlayOpen;
     nullState.style.display = shouldShow ? "flex" : "none";
     if (shouldShow && !isHelpOverlayOpen) {
       resetHomePanelScroll({ forceChatTop: true });
@@ -940,17 +1065,10 @@ async function handleTestResponse(prompt) {
     // Update the message with the response
     const contentWrapper = assistantMessageEl.querySelector(".message-content");
     if (contentWrapper) {
-      if (result.content && typeof result.content === "string") {
-        contentWrapper.innerHTML = marked.parse(result.content);
-      } else {
-        contentWrapper.innerHTML = ""; // Clear content if it's null/undefined or not a string
-      }
+      renderAssistantContent(contentWrapper, result.content, true);
       assistantMessageEl.classList.remove("loading");
       scrollToBottom();
     }
-
-    // Update the message in the messages array
-    assistantMessage.content = result.content;
     assistantMessage.status = "completed";
 
     // Hide typing indicator
