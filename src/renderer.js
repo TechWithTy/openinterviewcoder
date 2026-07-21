@@ -420,6 +420,9 @@ function setupEventListeners() {
   electronAPI.onToggleHelp?.(() => {
     toggleHelpOverlay();
   });
+  electronAPI.onPreviewExampleOutput?.((payload) => {
+    showPreviewExampleOutput(payload);
+  });
 
   // Handle response updates
   electronAPI.onStreamUpdate(updateMessage);
@@ -775,6 +778,54 @@ function addAssistantInfoMessage(text) {
   scrollToBottom();
 }
 
+function showPreviewExampleOutput(payload = {}) {
+  const prompt =
+    typeof payload.prompt === "string" && payload.prompt.trim().length > 0
+      ? payload.prompt.trim()
+      : "Preview example";
+  const content =
+    typeof payload.content === "string" && payload.content.trim().length > 0
+      ? payload.content
+      : "No preview content provided.";
+
+  resetChat();
+  toggleHelpOverlay(false);
+
+  const userMessage = {
+    type: "user",
+    timestamp: Date.now(),
+    content: prompt,
+  };
+  messages.push(userMessage);
+
+  const userMessageEl = document.createElement("div");
+  userMessageEl.className = "message user";
+  userMessageEl.textContent = prompt;
+  chatHistory.appendChild(userMessageEl);
+
+  const messageId = `preview-${Date.now()}`;
+  const assistantMessage = {
+    type: "assistant",
+    timestamp: Date.now(),
+    messageId,
+    content,
+    status: "completed",
+  };
+  messages.push(assistantMessage);
+
+  const assistantMessageEl = createMessageElement(messageId);
+  chatHistory.appendChild(assistantMessageEl);
+
+  const contentWrapper = assistantMessageEl.querySelector(".message-content");
+  if (contentWrapper) {
+    renderAssistantContent(contentWrapper, content, true);
+    assistantMessageEl.style.display = "block";
+  }
+
+  updateNullStateVisibility();
+  scrollToBottom();
+}
+
 // Add error message
 function addErrorMessage(message) {
   const errorEl = document.createElement("div");
@@ -950,6 +1001,33 @@ function tryScrollContainer(container, delta) {
   return container.scrollTop !== before;
 }
 
+function getHorizontalScrollTarget() {
+  const activeMessage = chatHistory.querySelector(
+    '.message .message-content.raw-code, .message .message-content pre'
+  );
+  if (!activeMessage) {
+    return null;
+  }
+
+  const candidates = [
+    activeMessage,
+    ...activeMessage.querySelectorAll("pre, .mermaid, code"),
+  ];
+
+  return candidates.find(
+    (node) => node.scrollWidth > node.clientWidth + 1
+  ) || null;
+}
+
+function tryScrollContainerHorizontally(container, delta) {
+  if (!container) {
+    return false;
+  }
+  const before = container.scrollLeft;
+  container.scrollLeft += delta;
+  return container.scrollLeft !== before;
+}
+
 function scrollByDelta(delta) {
   const primary = getActiveScrollContainer();
   const didScrollPrimary = tryScrollContainer(primary, delta);
@@ -960,12 +1038,31 @@ function scrollByDelta(delta) {
   tryScrollContainer(secondary, delta);
 }
 
+function scrollHorizontallyByDelta(delta) {
+  const horizontalTarget = getHorizontalScrollTarget();
+  if (tryScrollContainerHorizontally(horizontalTarget, delta)) {
+    return;
+  }
+
+  const primary = getActiveScrollContainer();
+  const didScrollPrimary = tryScrollContainerHorizontally(primary, delta);
+  if (didScrollPrimary) {
+    return;
+  }
+
+  const secondary = getSecondaryScrollContainer(primary);
+  tryScrollContainerHorizontally(secondary, delta);
+}
+
 function scrollActiveContainer(direction, amount = 300) {
-  const delta = direction === "up" ? -amount : amount;
   if (direction === "up") {
-    scrollByDelta(delta);
+    scrollByDelta(-amount);
   } else if (direction === "down") {
-    scrollByDelta(delta);
+    scrollByDelta(amount);
+  } else if (direction === "left") {
+    scrollHorizontallyByDelta(-amount);
+  } else if (direction === "right") {
+    scrollHorizontallyByDelta(amount);
   }
 }
 
@@ -1029,6 +1126,7 @@ if (typeof window !== "undefined") {
     handleRecordingHoldStop,
     toggleHelpOverlay,
     updateMessage,
+    showPreviewExampleOutput,
   };
 }
 

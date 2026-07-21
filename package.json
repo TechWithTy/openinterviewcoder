@@ -5,7 +5,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --inspect",
+    "dev": "electron . --inspect=0",
     "hackerrank": "electron . --two-step --model=o3-mini --prompt-template=hackerrank --dark-mode",
     "hackerrank-general": "electron . --two-step --model=o3-mini --prompt-template=hackerrank-general --dark-mode",
     "hackerrank-fe": "electron . --two-step --model=o3-mini --prompt-template=hackerrank-frontend --dark-mode",

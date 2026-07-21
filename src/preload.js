@@ -59,6 +59,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Test response
   testResponse: (prompt) => ipcRenderer.invoke("test-response", prompt),
+  previewExampleOutput: (payload) =>
+    ipcRenderer.invoke("preview-example-output", payload),
+  onPreviewExampleOutput: (callback) =>
+    ipcRenderer.on("preview-example-output", (event, value) => callback(value)),
 
   // File handling
   openFile: (path) => shell.openPath(path),

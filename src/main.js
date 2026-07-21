@@ -23,6 +23,11 @@ const { initializeLLMService } = require("./llm-service");
 const config = require("./config");
 
 const isDev = process.argv.includes("--debug") || process.argv.includes("--inspect");
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
 
 if (process.env.E2E_DISABLE_HARDWARE_ACCELERATION === "1") {
   app.disableHardwareAcceleration();
@@ -296,6 +301,20 @@ ipcMain.handle("save-settings", async (event, settings) => {
   return true;
 });
 
+ipcMain.handle("preview-example-output", (event, payload) => {
+  if (!invisibleWindow) {
+    return false;
+  }
+
+  if (settingsWindow) {
+    settingsWindow.hide();
+  }
+
+  showInvisibleWindow("ipc:preview-example-output");
+  invisibleWindow.webContents.send("preview-example-output", payload);
+  return true;
+});
+
 // IPC handler for settings window visibility
 ipcMain.handle("show-settings", () => {
   createSettingsWindow();
@@ -376,6 +395,19 @@ function showInvisibleWindow(reason) {
     invisibleWindow.showInactive();
   }
 }
+
+app.on("second-instance", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.hide();
+  }
+  if (invisibleWindow && !invisibleWindow.isDestroyed()) {
+    showInvisibleWindow("app:second-instance");
+    if (invisibleWindow.isMinimized()) {
+      invisibleWindow.restore();
+    }
+    invisibleWindow.focus();
+  }
+});
 
 function updateTypingSessionMode(enabled, reason) {
   isTypingSessionModeEnabled = Boolean(enabled);
@@ -1174,6 +1206,18 @@ function registerShortcuts() {
     }
   });
 
+  globalShortcut.register("Alt+Left", () => {
+    if (invisibleWindow) {
+      invisibleWindow.webContents.send("scroll-chat", "left");
+    }
+  });
+
+  globalShortcut.register("Alt+Right", () => {
+    if (invisibleWindow) {
+      invisibleWindow.webContents.send("scroll-chat", "right");
+    }
+  });
+
   // For macOS, also register Option key combinations
   if (process.platform === "darwin") {
     globalShortcut.register("Option+Up", () => {
@@ -1185,6 +1229,18 @@ function registerShortcuts() {
     globalShortcut.register("Option+Down", () => {
       if (invisibleWindow) {
         invisibleWindow.webContents.send("scroll-chat", "down");
+      }
+    });
+
+    globalShortcut.register("Option+Left", () => {
+      if (invisibleWindow) {
+        invisibleWindow.webContents.send("scroll-chat", "left");
+      }
+    });
+
+    globalShortcut.register("Option+Right", () => {
+      if (invisibleWindow) {
+        invisibleWindow.webContents.send("scroll-chat", "right");
       }
     });
   }

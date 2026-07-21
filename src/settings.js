@@ -5,6 +5,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const modelSelect = document.getElementById("modelSelect");
   const saveButton = document.getElementById("saveButton");
   const predefinedPromptsSelect = document.getElementById("predefinedPrompts");
+  const previewSelectedTemplateButton = document.getElementById(
+    "previewSelectedTemplateButton"
+  );
+  const previewDebugTemplateButton = document.getElementById(
+    "previewDebugTemplateButton"
+  );
   const twoStepCheck = document.getElementById("twoStepCheck");
   const renderAssistantHtmlCheck = document.getElementById("renderAssistantHtmlCheck");
 
@@ -23,6 +29,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     !saveButton ||
     !promptInput ||
     !predefinedPromptsSelect ||
+    !previewSelectedTemplateButton ||
+    !previewDebugTemplateButton ||
     !modelSelect ||
     !twoStepCheck ||
     !renderAssistantHtmlCheck ||
@@ -184,6 +192,221 @@ document.addEventListener("DOMContentLoaded", async () => {
     "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations."
   };
 
+  const EXAMPLE_OUTPUTS = {
+    default: {
+      prompt: "Summarize the screenshot and call out the highest-signal implementation risks.",
+      content: `Problem summary
+- Candidate is reviewing a React list rendering bug and a failing empty state.
+
+Key observations
+- The list items use array index keys.
+- The filter logic runs twice with duplicate state.
+- The empty state flashes because loading and data-ready are conflated.
+
+Suggested fix
+- Use stable item ids as React keys.
+- Derive filtered results during render from source data + query.
+- Split loading, loaded, and empty states.
+
+Risk to watch
+- If the API can return duplicate ids, normalize before rendering.`,
+    },
+    hackerrank: {
+      prompt: "Solve this coding challenge in Python and return the final answer.",
+      content: `Core problem
+- Compute the first non-repeating character index in a string.
+
+Optimal approach
+- Count character frequency, then scan once more to find the first index with frequency 1.
+
+\`\`\`python
+from collections import Counter
+
+def firstUniqChar(s):
+    counts = Counter(s)
+    for index, ch in enumerate(s):
+        if counts[ch] == 1:
+            return index
+    return -1
+\`\`\`
+
+Time: O(n)
+Space: O(1) for bounded alphabet / O(n) in general`,
+    },
+    "hackerrank-general": {
+      prompt: "Read the editor language and produce a full submission-ready answer.",
+      content: `Core problem
+- Detect the dominant language from the editor and return a full submission-ready answer.
+
+\`\`\`javascript
+function longestStreak(nums) {
+  if (!nums.length) return 0;
+  let best = 1;
+  let current = 1;
+
+  for (let i = 1; i < nums.length; i += 1) {
+    if (nums[i] === nums[i - 1] + 1) current += 1;
+    else current = 1;
+    if (current > best) best = current;
+  }
+
+  return best;
+}
+\`\`\`
+
+Time: O(n)
+Space: O(1)`,
+    },
+    "hackerrank-frontend": {
+      prompt: "Return the complete frontend solution for this UI problem.",
+      content: `Approach
+- Use a controlled input, derived filtered state, and accessible button labels.
+
+\`\`\`jsx
+export default function SearchableList({ items }) {
+  const [query, setQuery] = useState("");
+  const filteredItems = items.filter((item) =>
+    item.label.toLowerCase().includes(query.toLowerCase())
+  );
+
+  return (
+    <section>
+      <label htmlFor="search">Search</label>
+      <input id="search" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <ul>
+        {filteredItems.map((item) => (
+          <li key={item.id}>{item.label}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+\`\`\`
+
+Notes
+- Keeps first paint deterministic.
+- Uses stable ids instead of array index keys.`,
+    },
+    "hackerrank-frontend-v2": {
+      prompt: "Return the full copy-pasteable React solution, not just the fix.",
+      content: `\`\`\`jsx
+export default function Articles({ articles }) {
+  const visibleArticles = articles.filter((article) => article.points > 0);
+
+  return (
+    <main>
+      {visibleArticles.length === 0 ? (
+        <p>No scored articles available.</p>
+      ) : (
+        <ul>
+          {visibleArticles.map((article) => (
+            <li key={article.id}>{article.title}</li>
+          ))}
+        </ul>
+      )}
+    </main>
+  );
+}
+\`\`\`
+
+Why this works
+- Returns the full copy-pasteable component.
+- Derives visible output synchronously during render.`,
+    },
+    "hackerrank-frontend-v3": {
+      prompt: "Use all visible panes and return a submission-ready multi-file answer.",
+      content: `// File: src/App.jsx
+\`\`\`jsx
+import ResultsList from "./ResultsList";
+
+export default function App({ users }) {
+  const sortedUsers = [...users].sort((a, b) => b.score - a.score);
+  return <ResultsList users={sortedUsers} />;
+}
+\`\`\`
+
+// File: src/ResultsList.jsx
+\`\`\`jsx
+export default function ResultsList({ users }) {
+  return (
+    <ul aria-label="Ranked users">
+      {users.map((user) => (
+        <li key={user.id}>{user.name}: {user.score}</li>
+      ))}
+    </ul>
+  );
+}
+\`\`\`
+
+Verification
+- Preserves visible file boundaries.
+- Uses stable keys.
+- Avoids useEffect for initial render.`,
+    },
+    "hackerrank-frontend-v4": {
+      prompt: "Inspect every visible code tab and return the corrected final code first.",
+      content: `// File: src/App.tsx
+\`\`\`tsx
+import { useState } from "react";
+import TaskList from "./TaskList";
+
+export default function App({ initialTasks }) {
+  const [tasks, setTasks] = useState(initialTasks);
+
+  function toggleTask(taskId) {
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === taskId ? { ...task, done: !task.done } : task
+      )
+    );
+  }
+
+  return <TaskList tasks={tasks} onToggleTask={toggleTask} />;
+}
+\`\`\`
+
+Verification
+- Updated files: src/App.tsx
+- Initial UI is derived synchronously from props.
+- Preserves event handler signatures and stable ids.
+
+Wide-line preview
+\`\`\`tsx
+const debugSnapshot = "task-001:queued|task-002:done|task-003:queued|task-004:queued|task-005:done|task-006:queued|task-007:done|task-008:queued|task-009:done|task-010:queued|task-011:queued|task-012:done|task-013:queued|task-014:done|task-015:queued|task-016:done|task-017:queued|task-018:queued|task-019:done|task-020:queued";
+\`\`\``,
+    },
+    debug: {
+      prompt: "Review this code and list the most important bugs or regressions first.",
+      content: `Findings
+1. ` + `src/hooks/useSearch.js:18` + ` recreates a debounced callback on every render, so pending calls are lost.
+2. ` + `src/App.jsx:42` + ` mutates the original array before sorting, which can break memoized parents.
+3. ` + `src/api/client.js:9` + ` logs bearer tokens to the console in development.
+
+Fixed version
+\`\`\`js
+const sortedUsers = [...users].sort((a, b) => a.name.localeCompare(b.name));
+const requestAuditTrail = "GET:/api/search?q=react-hooks-debounce-and-cancellation&page=1&sort=updated_at_desc&include=owner,labels,review_state,latest_commit,status_checks,review_threads,ci_annotations,artifact_urls,dependency_graph_summary,security_findings";
+\`\`\`
+
+Residual risk
+- Search requests still need cancellation if the API is slow.`
+    }
+  };
+
+  async function previewTemplateExample(templateKey) {
+    const example = EXAMPLE_OUTPUTS[templateKey];
+    if (!example) {
+      alert("No example output is available for the current selection yet.");
+      return;
+    }
+
+    await window.electronAPI.previewExampleOutput({
+      templateKey,
+      prompt: example.prompt,
+      content: example.content,
+    });
+  }
+
   // Handle template selection
   predefinedPromptsSelect.addEventListener("change", (e) => {
     const selected = e.target.value;
@@ -208,6 +431,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  previewSelectedTemplateButton.addEventListener("click", async () => {
+    const selected = predefinedPromptsSelect.value;
+    if (selected === "custom") {
+      alert("Select a predefined template first, or add a custom preview mapping in code.");
+      return;
+    }
+    await previewTemplateExample(selected);
+  });
+
+  previewDebugTemplateButton.addEventListener("click", async () => {
+    predefinedPromptsSelect.value = "debug";
+    promptInput.value = PREDEFINED_PROMPTS.debug;
+    await previewTemplateExample("debug");
+  });
+
   // Load current settings
   try {
     const settings = await window.electronAPI.getSettings();
@@ -218,6 +456,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if (settings && settings.prompt) {
       promptInput.value = settings.prompt;
+      for (const [key, value] of Object.entries(PREDEFINED_PROMPTS)) {
+        if (settings.prompt === value) {
+          predefinedPromptsSelect.value = key;
+          break;
+        }
+      }
     }
     if (settings && settings.model) {
       modelSelect.value = settings.model;
