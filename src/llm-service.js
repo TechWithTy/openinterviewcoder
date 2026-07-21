@@ -3,6 +3,8 @@ const { ipcMain } = require("electron");
 const fs = require("fs");
 const config = require("./config");
 
+const DEFAULT_ANALYSIS_PROMPT = "Analyze this screenshot and provide insights.";
+
 // System prompt for the AI assistant
 const SYSTEM_PROMPT = `You are an invisible AI assistant that analyzes screenshots during meetings and presentations.
 
@@ -28,6 +30,44 @@ Format your responses in sections:
 • Technical Notes (if code/data is present)`;
 
 let isInitialized = false;
+
+function buildTaskPrompt(userPrompt, configuredPrompt = config.getPrompt()) {
+  const normalizedUserPrompt = String(userPrompt || "").trim();
+  const normalizedConfiguredPrompt = String(configuredPrompt || "").trim();
+
+  if (!normalizedUserPrompt) {
+    return normalizedConfiguredPrompt || DEFAULT_ANALYSIS_PROMPT;
+  }
+
+  if (
+    !normalizedConfiguredPrompt ||
+    normalizedConfiguredPrompt === DEFAULT_ANALYSIS_PROMPT
+  ) {
+    return normalizedUserPrompt;
+  }
+
+  return `${normalizedConfiguredPrompt}
+
+--- User Request ---
+${normalizedUserPrompt}`;
+}
+
+function buildTranscriptionPrompt(source, text) {
+  const normalizedSource = String(source || "").trim() || "Unknown";
+  const normalizedText = String(text || "").trim();
+
+  return `Treat the following transcribed speech as the user's direct request, not as content to summarize.
+
+Source: ${normalizedSource}
+Transcript: "${normalizedText}"
+
+Instructions:
+- Answer the request directly.
+- Do not say "the transcript", "transcribed speech", or "source".
+- Correct obvious speech-to-text errors in technical terms before answering.
+- For collaborative document editors, if a phrase sounds like "ChatGPT engine", interpret it as "Operational Transformation engine" unless the user explicitly asks about ChatGPT.
+- Do not mention ChatGPT, OpenAI, or AI model internals unless explicitly requested.`;
+}
 
 function shouldPrioritizeLeftPane(prompt) {
   const normalized = String(prompt || "").toLowerCase();
@@ -173,8 +213,11 @@ async function initializeLLMService() {
     ipcMain.handle("process-transcription", async (event, text) => {
       try {
         validateConfig();
+        const match = String(text || "").match(/^Source:\s*([^,]+),\s*Text:\s*([\s\S]*)$/i);
+        const source = match ? match[1].trim() : "Unknown";
+        const transcript = match ? match[2].trim() : String(text || "").trim();
         return await makeLLMRequest(event, { 
-          prompt: `The following is transcribed speech: "${text}". Please summarize it or answer any questions if relevant.`
+          prompt: buildTranscriptionPrompt(source, transcript)
         });
       } catch (error) {
         console.error("Transcription processing error:", error);
@@ -213,7 +256,7 @@ function validateConfig() {
 
 async function makeLLMRequest(event, data) {
   const apiKey = config.getOpenAIKey();
-  const prompt = data.prompt || config.getPrompt();
+  const prompt = buildTaskPrompt(data.prompt);
   let selectedModel = config.getModel() || "gpt-4o-mini";
   let isOModel = selectedModel.startsWith("o1") || selectedModel.startsWith("o3");
   const useTwoStep = config.getTwoStep();
@@ -517,5 +560,10 @@ async function makeLLMRequest(event, data) {
 
 module.exports = {
   initializeLLMService,
+  __test__: {
+    buildTaskPrompt,
+    buildTranscriptionPrompt,
+    DEFAULT_ANALYSIS_PROMPT,
+  },
 };
 

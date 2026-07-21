@@ -7,6 +7,7 @@
     "start": "electron .",
     "dev": "electron . --inspect",
     "hackerrank": "electron . --two-step --model=o3-mini --prompt-template=hackerrank --dark-mode",
+    "hackerrank-general": "electron . --two-step --model=o3-mini --prompt-template=hackerrank-general --dark-mode",
     "hackerrank-fe": "electron . --two-step --model=o3-mini --prompt-template=hackerrank-frontend --dark-mode",
     "hackerrank-fe:v2": "electron . --two-step --model=o3-mini --prompt-template=hackerrank-frontend-v2 --dark-mode",
     "hackerrank-fe:v3": "electron . --two-step --model=o3-mini --prompt-template=hackerrank-frontend-v3 --dark-mode",
@@ -24,6 +25,7 @@
     "dotenv": "^16.4.5",
     "electron-store": "^8.2.0",
     "marked": "^15.0.7",
+    "mermaid": "9.4.3",
     "microsoft-cognitiveservices-speech-sdk": "^1.48.0"
   },
   "devDependencies": {

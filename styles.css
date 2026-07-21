@@ -65,6 +65,7 @@ body.dark-mode #invisible-container {
   padding: 12px 16px;
   border-radius: 12px;
   max-width: 90%;
+  min-width: 0;
   opacity: 0;
   transform: translateY(10px);
   animation: messageAppear 0.3s ease forwards;
@@ -116,6 +117,9 @@ body.dark-mode .message.assistant {
 .message-content {
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  min-width: 0;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
 }
@@ -134,12 +138,44 @@ body.dark-mode .message.assistant {
   background-color: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   padding: 16px;
-  overflow: auto;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   margin: 6px 0;
 }
 
+.message-content.markdown-body pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.message-content.markdown-body .mermaid {
+  display: block;
+  max-width: 100%;
+  margin: 10px 0;
+  padding: 14px;
+  overflow-x: auto;
+  white-space: normal;
+  color: rgba(255, 255, 255, 0.92);
+  background-color: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.message-content.markdown-body .mermaid svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
 .message-content.raw-code {
-  white-space: pre-wrap;
+  white-space: pre;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
   font-size: 13px;
   line-height: 1.45;

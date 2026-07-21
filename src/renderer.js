@@ -111,9 +111,15 @@ function renderAssistantContent(contentWrapper, content, isComplete = false) {
     return;
   }
 
-  const hasMermaid = content.includes("```mermaid") || content.includes("mermaid");
+  const hasMermaid =
+    /```\s*mermaid/i.test(content) ||
+    /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|gantt|pie|journey|gitGraph|mindmap|timeline)\b/im.test(content);
   
-  if ((!renderAssistantHtml && !hasMermaid) || looksLikeRawCodeResponse(content)) {
+  if (
+    typeof marked === "undefined" ||
+    (!renderAssistantHtml && !hasMermaid) ||
+    looksLikeRawCodeResponse(content)
+  ) {
     contentWrapper.classList.add("raw-code");
     contentWrapper.textContent = content;
     return;
@@ -130,13 +136,12 @@ function renderAssistantContent(contentWrapper, content, isComplete = false) {
     
     if (typeof mermaid !== "undefined") {
       // Resilient fallback: if the AI forgot the language-mermaid tag, check all code blocks
+      const mermaidStartPattern =
+        /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|stateDiagram-v2|erDiagram|gantt|pie|journey|gitGraph|mindmap|timeline)\b/;
       const allCodeBlocks = contentWrapper.querySelectorAll("code");
       allCodeBlocks.forEach((block) => {
         const text = block.textContent.trim();
-        if (text.startsWith("graph ") || text.startsWith("flowchart ") || 
-            text.startsWith("sequenceDiagram") || text.startsWith("classDiagram") || 
-            text.startsWith("stateDiagram") || text.startsWith("erDiagram") || 
-            text.startsWith("gantt") || text.startsWith("pie")) {
+        if (mermaidStartPattern.test(text)) {
           block.classList.add("mermaid");
         }
       });
@@ -857,10 +862,15 @@ function resetChat() {
 function updateNullStateVisibility() {
   const nullState = document.getElementById("null-state");
   if (nullState) {
-    const hasContent = chatHistory.children.length > 0 || messages.length > 0;
-    const shouldShow = !hasContent || isHelpOverlayOpen;
+    const hasContent =
+      chatHistory.querySelector(".message") !== null || messages.length > 0;
+    if (hasContent) {
+      isHelpOverlayOpen = false;
+      applyHelpOverlayStyling(false);
+    }
+    const shouldShow = !hasContent;
     nullState.style.display = shouldShow ? "flex" : "none";
-    if (shouldShow && !isHelpOverlayOpen) {
+    if (shouldShow) {
       resetHomePanelScroll({ forceChatTop: true });
     }
   }

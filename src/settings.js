@@ -77,7 +77,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   autoDetectInputCheck.addEventListener('change', toggleDeviceSelectors);
   autoDetectOutputCheck.addEventListener('change', toggleDeviceSelectors);
 
-
   // Predefined prompt templates
   const PREDEFINED_PROMPTS = {
     "default": "Analyze this screenshot and provide insights.",
@@ -91,6 +90,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       <step>Write clean, robust, and commented code in Python to solve it. Ensure you handle all edge cases and test cases.</step>
       <step>Explicitly state the Time and Space Complexity (Big-O).</step>
       <step>Suggest potential follow-up questions and briefly answer them.</step>
+    </steps>
+  </task>
+</poml>`,
+    "hackerrank-general": `<poml version="3.0">
+  <role>Expert SWE & Competitive Programmer</role>
+  <task>
+    Analyze the coding interview problem (typically on the left side of the screenshot) and any starter code or editor contents. Produce a production-grade, optimal solution.
+    <steps>
+      <step>Identify the programming language being used in the editor pane. If none is clearly visible, default to Python.</step>
+      <step>State the core problem and constraints.</step>
+      <step>Determine the optimal algorithm (optimize for the best possible Big-O Time and Space complexity).</step>
+      <step>Write clean, robust, and commented code in the identified programming language to solve it. Ensure you conform to starter function signatures and handle all edge cases and test cases.</step>
+      <step>Explicitly state the Time and Space Complexity (Big-O).</step>
     </steps>
   </task>
 </poml>`,

@@ -2,6 +2,7 @@ const path = require("path");
 const { _electron: electron, test, expect } = require("@playwright/test");
 
 const APP_ROOT = path.resolve(__dirname, "../../../");
+const TEST_USER_DATA_DIR = path.join(APP_ROOT, "test-results", "electron-user-data-transcription");
 const ELECTRON_BINARY = path.join(
   APP_ROOT,
   "node_modules",
@@ -13,9 +14,15 @@ const ELECTRON_BINARY = path.join(
 async function launchApp() {
   const electronApp = await electron.launch({
     executablePath: ELECTRON_BINARY,
-    args: [APP_ROOT],
+    args: [
+      "--disable-gpu",
+      "--disable-gpu-sandbox",
+      `--user-data-dir=${TEST_USER_DATA_DIR}`,
+      APP_ROOT,
+    ],
     env: {
       ...process.env,
+      E2E_DISABLE_HARDWARE_ACCELERATION: "1",
       OPENAI_API_KEY: process.env.OPENAI_API_KEY || "sk-e2e-placeholder-key",
     },
   });
@@ -122,7 +129,9 @@ test.describe("Electron transcription flow", () => {
   });
 
   test.afterEach(async () => {
-    await electronApp.close();
+    if (electronApp) {
+      await electronApp.close();
+    }
   });
 
   test("renders the primary UI shell", async () => {
@@ -161,6 +170,7 @@ test.describe("Electron transcription flow", () => {
         hasText: "[Input]:",
       })
     ).toContainText("hello world");
+    await expect(window.locator("#null-state")).toBeHidden();
 
     await expect
       .poll(async () => (await getRendererMockState(window)).processCalls.length)
@@ -213,6 +223,7 @@ test.describe("Electron transcription flow", () => {
         hasText: "[Output]:",
       })
     ).toContainText("candidate speaking now");
+    await expect(window.locator("#null-state")).toBeHidden();
 
     await expect
       .poll(async () => (await getRendererMockState(window)).processCalls.length)
@@ -342,6 +353,7 @@ test.describe("Electron transcription flow", () => {
     await expect(window.locator('[data-message-id="stream-1"]')).toContainText(
       "partial response"
     );
+    await expect(window.locator("#null-state")).toBeHidden();
     await expect(window.locator("#typing-indicator")).toHaveClass(/visible/);
 
     await window.evaluate(() => {

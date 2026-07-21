@@ -24,6 +24,9 @@ const config = require("./config");
 
 const isDev = process.argv.includes("--debug") || process.argv.includes("--inspect");
 
+if (process.env.E2E_DISABLE_HARDWARE_ACCELERATION === "1") {
+  app.disableHardwareAcceleration();
+}
 
 const PREDEFINED_PROMPTS = {
   "default": "Analyze this screenshot and provide insights.",
@@ -37,6 +40,19 @@ const PREDEFINED_PROMPTS = {
       <step>Write clean, robust, and commented code in Python to solve it. Ensure you handle all edge cases and test cases.</step>
       <step>Explicitly state the Time and Space Complexity (Big-O).</step>
       <step>Suggest potential follow-up questions and briefly answer them.</step>
+    </steps>
+  </task>
+</poml>`,
+  "hackerrank-general": `<poml version="3.0">
+  <role>Expert SWE & Competitive Programmer</role>
+  <task>
+    Analyze the coding interview problem (typically on the left side of the screenshot) and any starter code or editor contents. Produce a production-grade, optimal solution.
+    <steps>
+      <step>Identify the programming language being used in the editor pane. If none is clearly visible, default to Python.</step>
+      <step>State the core problem and constraints.</step>
+      <step>Determine the optimal algorithm (optimize for the best possible Big-O Time and Space complexity).</step>
+      <step>Write clean, robust, and commented code in the identified programming language to solve it. Ensure you conform to starter function signatures and handle all edge cases and test cases.</step>
+      <step>Explicitly state the Time and Space Complexity (Big-O).</step>
     </steps>
   </task>
 </poml>`,
@@ -120,8 +136,12 @@ const PREDEFINED_PROMPTS = {
   <task>
     Analyze the systems design or algorithmic problem presented. Provide a comprehensive architectural and algorithmic solution that includes clear diagrams and structured decision-making.
     <steps>
+      <step>Do not mention ChatGPT, OpenAI, or AI model internals unless the user explicitly asks about them. If the topic is collaborative editing, interpret "OT engine" as "Operational Transformation engine".</step>
       <step>State the core problem, functional requirements, and non-functional requirements (e.g., scale, latency, consistency).</step>
-      <step>Outline the proposed high-level architecture. Draw and showcase architectural decisions using clear Mermaid.js diagrams (e.g., flowchart, sequence diagram, or system architecture diagram) to visualize the flow and components. YOU MUST wrap your Mermaid code in a markdown code block exactly like this: \`\`\`mermaid [your code] \`\`\`.</step>
+      <step>Outline the proposed high-level architecture. Draw and showcase architectural decisions using clear Mermaid.js diagrams (e.g., flowchart, sequence diagram, or system architecture diagram) to visualize the flow and components. Mermaid must use simple ASCII node IDs and simple bracket labels, avoiding parentheses, quotes, HTML, markdown, emoji, and special characters inside labels. YOU MUST wrap Mermaid code in a fenced markdown code block with the language tag on its own line, exactly like: \`\`\`mermaid
+graph TD
+  A[Client] --> B[Service]
+\`\`\`.</step>
       <step>Detail the core algorithmic logic and data models required for the system. Explain the trade-offs of chosen algorithms, including Time and Space Complexity.</step>
       <step>Discuss database choices, API design, caching strategies, and load balancing if applicable.</step>
       <step>Identify potential bottlenecks and single points of failure, and explain how the architecture mitigates them.</step>
@@ -774,9 +794,6 @@ function createInvisibleWindow() {
     logEvent("window", "did-finish-load", {
       url: invisibleWindow.webContents.getURL(),
     });
-    if (hasDarkModeFlag) {
-      invisibleWindow.webContents.send("toggle-dark-mode");
-    }
   });
 
   invisibleWindow.webContents.on("did-fail-load", (_, errorCode, errorDescription) => {
