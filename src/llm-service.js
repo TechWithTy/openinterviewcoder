@@ -4,6 +4,18 @@ const fs = require("fs");
 const config = require("./config");
 
 const DEFAULT_ANALYSIS_PROMPT = "Analyze this screenshot and provide insights.";
+const MERMAID_GUIDANCE = `
+
+--- Diagram Guidance ---
+When a diagram would materially clarify architecture, sequence, state, relationships, a workflow, or a timeline, include one concise Mermaid diagram in a fenced \`\`\`mermaid block. Choose the most suitable Mermaid chart type (for example flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, gantt, pie, journey, gitGraph, or mindmap). Do not add a diagram when concise prose or code is clearer, and never invent facts solely to fill a diagram.`;
+const SYSTEM_DESIGN_MERMAID_REQUIREMENT = `
+
+--- System Design Diagram Requirement ---
+For every system-design response that proposes, revises, explains, or deepens a design, you MUST include exactly one valid Mermaid diagram in a fenced \`\`\`mermaid block. Use flowchart for high-level architecture, sequenceDiagram for request or event flow, erDiagram for data relationships, and stateDiagram-v2 for state transitions. The only exception is a response limited exclusively to clarifying questions. The diagram must match the stated design and be concise.`;
+const HIRING_MANAGER_MERMAID_REQUIREMENT = `
+
+--- Technical Interview Diagram Requirement ---
+For a Hiring Manager response about a technical system, architecture, production ownership, incident, API, data flow, deployment, reliability, or scalability, you MUST include exactly one concise valid Mermaid diagram in a fenced \`\`\`mermaid block. Use the diagram to show the system or flow being described. Do not add one for a purely behavioral, motivation, retention, or career-transition question.`;
 
 // System prompt for the AI assistant
 const SYSTEM_PROMPT = `You are an invisible AI assistant that analyzes screenshots during meetings and presentations.
@@ -43,7 +55,18 @@ function buildTaskPrompt(userPrompt, configuredPrompt = config.getPrompt()) {
 
 --- User Request ---
 ${normalizedUserPrompt}`;
-  return config.getInterviewMode() ? `${basePrompt}${buildInterviewDocumentContext()}` : basePrompt;
+  const interviewContext = config.getInterviewMode()
+    ? buildInterviewDocumentContext()
+    : "";
+  const isSystemDesignPrompt = /Real-Time System Design Interview Copilot/i.test(
+    normalizedConfiguredPrompt
+  );
+  const isHiringManagerPrompt = /Real-Time Software Engineering Interview Copilot/i.test(
+    normalizedConfiguredPrompt
+  );
+  return `${basePrompt}${interviewContext}${MERMAID_GUIDANCE}${
+    isSystemDesignPrompt ? SYSTEM_DESIGN_MERMAID_REQUIREMENT : ""
+  }${isHiringManagerPrompt ? HIRING_MANAGER_MERMAID_REQUIREMENT : ""}`;
 }
 
 function buildInterviewDocumentContext() {
@@ -567,6 +590,9 @@ module.exports = {
     buildTaskPrompt,
     buildTranscriptionPrompt,
     DEFAULT_ANALYSIS_PROMPT,
+    MERMAID_GUIDANCE,
+    SYSTEM_DESIGN_MERMAID_REQUIREMENT,
+    HIRING_MANAGER_MERMAID_REQUIREMENT,
   },
 };
 

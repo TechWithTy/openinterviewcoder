@@ -11,6 +11,8 @@ test.describe("LLM prompt composition", () => {
     expect(prompt).toContain("SYSTEMS TEMPLATE: always include Mermaid.");
     expect(prompt).toContain("--- User Request ---");
     expect(prompt).toContain("Explain Google Docs collaboration");
+    expect(prompt).toContain("Diagram Guidance");
+    expect(prompt).toContain("```mermaid");
   });
 
   test("uses typed requests directly when only the default prompt is active", () => {
@@ -19,7 +21,8 @@ test.describe("LLM prompt composition", () => {
       __test__.DEFAULT_ANALYSIS_PROMPT
     );
 
-    expect(prompt).toBe("Explain a websocket flow.");
+    expect(prompt).toContain("Explain a websocket flow.");
+    expect(prompt).toContain("Diagram Guidance");
   });
 
   test("builds direct-answer transcription prompts with technical correction rules", () => {
@@ -32,5 +35,25 @@ test.describe("LLM prompt composition", () => {
     expect(prompt).toContain("Operational Transformation engine");
     expect(prompt).toContain("Do not mention ChatGPT");
     expect(prompt).not.toContain("Please summarize");
+  });
+
+  test("requires a Mermaid diagram for system design responses", () => {
+    const prompt = __test__.buildTaskPrompt(
+      "Propose the high-level architecture for a notification system.",
+      "<role>Act as my Real-Time System Design Interview Copilot.</role>"
+    );
+
+    expect(prompt).toContain("System Design Diagram Requirement");
+    expect(prompt).toContain("MUST include exactly one valid Mermaid diagram");
+  });
+
+  test("requires a Mermaid diagram for technical hiring manager responses", () => {
+    const prompt = __test__.buildTaskPrompt(
+      "Explain the production architecture you owned.",
+      "<role>Act as my Real-Time Software Engineering Interview Copilot.</role>"
+    );
+
+    expect(prompt).toContain("Technical Interview Diagram Requirement");
+    expect(prompt).toContain("MUST include exactly one concise valid Mermaid diagram");
   });
 });
