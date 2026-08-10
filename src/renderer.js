@@ -814,6 +814,9 @@ function showPreviewExampleOutput(payload = {}) {
   messages.push(assistantMessage);
 
   const assistantMessageEl = createMessageElement(messageId);
+  if (payload.previewMode === "horizontal") {
+    assistantMessageEl.classList.add("preview-horizontal-scroll");
+  }
   chatHistory.appendChild(assistantMessageEl);
 
   const contentWrapper = assistantMessageEl.querySelector(".message-content");

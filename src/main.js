@@ -11,6 +11,7 @@ const {
   Menu,
   Tray,
   shell,
+  dialog,
 } = require("electron");
 const fs = require("fs");
 const path = require("path");
@@ -20,6 +21,7 @@ const {
   getRecentScreenshots,
 } = require("./screenshot");
 const { initializeLLMService } = require("./llm-service");
+const { extractDocument } = require("./document-service");
 const config = require("./config");
 
 const isDev = process.argv.includes("--debug") || process.argv.includes("--inspect");
@@ -248,6 +250,9 @@ ipcMain.handle("get-settings", () => {
     outputDeviceId: config.getOutputDeviceId(),
     azureSpeechKey: config.getAzureSpeechKey(),
     azureSpeechRegion: config.getAzureSpeechRegion(),
+    interviewMode: config.getInterviewMode(),
+    resumeDocument: config.getResumeDocument(),
+    jobDescriptionDocument: config.getJobDescriptionDocument(),
   };
 });
 
@@ -290,6 +295,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   if (settings.outputDeviceId !== undefined) {
     config.setOutputDeviceId(settings.outputDeviceId);
   }
+  if (settings.interviewMode !== undefined) {
+    config.setInterviewMode(settings.interviewMode);
+  }
   if (settings.azureSpeechKey !== undefined) {
     config.setAzureSpeechKey(settings.azureSpeechKey);
   }
@@ -299,6 +307,24 @@ ipcMain.handle("save-settings", async (event, settings) => {
   // Reinitialize LLM service with new API key
   await initializeLLMService();
   return true;
+});
+
+ipcMain.handle("upload-interview-document", async (event, kind) => {
+  const isResume = kind === "resume";
+  const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: isResume ? "Select résumé" : "Select job description",
+    properties: ["openFile"],
+    filters: [{ name: "Documents", extensions: ["pdf", "docx"] }],
+  });
+  if (result.canceled) return { success: true, canceled: true };
+  try {
+    const document = await extractDocument(result.filePaths[0]);
+    if (isResume) config.setResumeDocument(document);
+    else config.setJobDescriptionDocument(document);
+    return { success: true, document: { name: document.name, type: document.type, truncated: document.truncated } };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle("preview-example-output", (event, payload) => {
@@ -892,6 +918,7 @@ function createInvisibleWindow() {
 
 function createSettingsWindow() {
   if (settingsWindow) {
+    hideInvisibleWindow("settings:reopen");
     settingsWindow.show();
     return;
   }
@@ -916,6 +943,7 @@ function createSettingsWindow() {
 
 
   settingsWindow.once("ready-to-show", () => {
+    hideInvisibleWindow("settings:open");
     settingsWindow.show();
   });
 
@@ -924,6 +952,7 @@ function createSettingsWindow() {
     if (!app.isQuitting) {
       event.preventDefault();
       settingsWindow.hide();
+      showInvisibleWindow("settings:close");
     }
     return false;
   });

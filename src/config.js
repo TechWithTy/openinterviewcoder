@@ -12,6 +12,13 @@ const store = new Store({
       transcriptionPauseMs: 2500,
       inputDeviceId: "default",
       outputDeviceId: "default",
+      interviewMode: false,
+      interview: {
+        resumeName: "",
+        resumeText: "",
+        jobDescriptionName: "",
+        jobDescriptionText: "",
+      },
       azure: {
         speechKey: "",
         region: ""
@@ -50,6 +57,24 @@ module.exports = {
   setInputDeviceId: (id) => store.set("openai.inputDeviceId", id),
   getOutputDeviceId: () => store.get("openai.outputDeviceId") || "default",
   setOutputDeviceId: (id) => store.set("openai.outputDeviceId", id),
+  getInterviewMode: () => store.get("openai.interviewMode") ?? false,
+  setInterviewMode: (enabled) => store.set("openai.interviewMode", Boolean(enabled)),
+  getResumeDocument: () => ({
+    name: store.get("openai.interview.resumeName") || "",
+    text: store.get("openai.interview.resumeText") || "",
+  }),
+  setResumeDocument: ({ name, text }) => {
+    store.set("openai.interview.resumeName", name || "");
+    store.set("openai.interview.resumeText", text || "");
+  },
+  getJobDescriptionDocument: () => ({
+    name: store.get("openai.interview.jobDescriptionName") || "",
+    text: store.get("openai.interview.jobDescriptionText") || "",
+  }),
+  setJobDescriptionDocument: ({ name, text }) => {
+    store.set("openai.interview.jobDescriptionName", name || "");
+    store.set("openai.interview.jobDescriptionText", text || "");
+  },
   getAzureSpeechKey: () => process.env.WHISPER_API_KEY_1 || store.get("openai.azure.speechKey") || "",
   setAzureSpeechKey: (key) => store.set("openai.azure.speechKey", key),
   getAzureSpeechRegion: () => process.env.WHISPER_API_KEY_LOCATION || store.get("openai.azure.region") || "",

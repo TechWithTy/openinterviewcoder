@@ -24,9 +24,11 @@
     "axios": "^0.27.2",
     "dotenv": "^16.4.5",
     "electron-store": "^8.2.0",
+    "mammoth": "^1.12.1",
     "marked": "^15.0.7",
     "mermaid": "9.4.3",
-    "microsoft-cognitiveservices-speech-sdk": "^1.48.0"
+    "microsoft-cognitiveservices-speech-sdk": "^1.48.0",
+    "pdf-parse": "1.1.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

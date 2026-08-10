@@ -279,6 +279,7 @@
               <option value="hackerrank-frontend-v3">HackerRank: Frontend Coding Interview v3</option>
               <option value="hackerrank-frontend-v4">HackerRank: Frontend Coding Interview v4</option>
               <option value="debug">Code Review: Finding Bugs</option>
+              <option value="hiring-manager">Hiring Manager Interview</option>
             </select>
             <textarea
               id="analysisPrompt"
@@ -292,13 +293,40 @@
               <button type="button" id="previewSelectedTemplateButton" class="preview-button primary">
                 Show Selected Example In Main View
               </button>
-              <button type="button" id="previewDebugTemplateButton" class="preview-button">
-                Show Debug Example
-              </button>
+              <select id="previewExampleSelect" aria-label="Preview example" style="width: auto; margin: 0;">
+                <option value="debug">Horizontal scroll view</option>
+                <option value="vertical-scroll">Vertical scroll view</option>
+                <option value="mermaid-flow">Mermaid flowchart</option>
+                <option value="mermaid-sequence">Mermaid sequence diagram</option>
+                <option value="mermaid-architecture">Mermaid architecture diagram</option>
+                <option value="mermaid-class">Mermaid class diagram</option>
+                <option value="mermaid-state">Mermaid state diagram</option>
+                <option value="mermaid-er">Mermaid entity relationship diagram</option>
+                <option value="mermaid-gantt">Mermaid Gantt chart</option>
+                <option value="mermaid-pie">Mermaid pie chart</option>
+                <option value="mermaid-journey">Mermaid user journey</option>
+                <option value="mermaid-git">Mermaid Git graph</option>
+                <option value="mermaid-mindmap">Mermaid mindmap</option>
+                <option value="mermaid-requirement">Mermaid requirement diagram</option>
+              </select>
+              <button type="button" id="previewExampleButton" class="preview-button">Preview example</button>
             </div>
             <div class="preview-actions-description">
-              Opens the main overlay and injects a mocked assistant response using the real chat renderer.
+              Choose a debug or Mermaid example to preview it in the main overlay using the real chat renderer.
             </div>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">Interview documents</label>
+          <div class="setting-control">
+            <div class="template-preview-actions">
+              <button type="button" id="uploadResumeButton" class="preview-button">Upload résumé (PDF/DOCX)</button>
+              <button type="button" id="uploadJobDescriptionButton" class="preview-button">Upload job description (PDF/DOCX)</button>
+            </div>
+            <div id="resumeDocumentStatus" class="api-key-description">No résumé uploaded.</div>
+            <div id="jobDescriptionDocumentStatus" class="api-key-description">No job description uploaded.</div>
+            <div class="api-key-description">These files are used only when the Hiring Manager Interview prompt is selected.</div>
           </div>
         </div>
       </div>

@@ -8,11 +8,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const previewSelectedTemplateButton = document.getElementById(
     "previewSelectedTemplateButton"
   );
-  const previewDebugTemplateButton = document.getElementById(
-    "previewDebugTemplateButton"
-  );
+  const previewExampleSelect = document.getElementById("previewExampleSelect");
+  const previewExampleButton = document.getElementById("previewExampleButton");
   const twoStepCheck = document.getElementById("twoStepCheck");
   const renderAssistantHtmlCheck = document.getElementById("renderAssistantHtmlCheck");
+  const uploadResumeButton = document.getElementById("uploadResumeButton");
+  const uploadJobDescriptionButton = document.getElementById("uploadJobDescriptionButton");
+  const resumeDocumentStatus = document.getElementById("resumeDocumentStatus");
+  const jobDescriptionDocumentStatus = document.getElementById("jobDescriptionDocumentStatus");
 
   const autoDetectInputCheck = document.getElementById("autoDetectInputCheck");
   const inputDeviceContainer = document.getElementById("inputDeviceContainer");
@@ -30,7 +33,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     !promptInput ||
     !predefinedPromptsSelect ||
     !previewSelectedTemplateButton ||
-    !previewDebugTemplateButton ||
+    !previewExampleSelect ||
+    !previewExampleButton ||
     !modelSelect ||
     !twoStepCheck ||
     !renderAssistantHtmlCheck ||
@@ -189,8 +193,94 @@ document.addEventListener("DOMContentLoaded", async () => {
     </steps>
   </task>
 </poml>`,
-    "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations."
+    "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations.",
+    "hiring-manager": `<poml>
+  <role>Act as my Real-Time Software Engineering Interview Copilot, Senior Engineering Hiring Manager, Technical Interview Coach, and Staff-Level Software Engineer.</role>
+  <task>
+    You are assisting me LIVE during a software engineering interview. Take the interviewer's current question and immediately generate a concise, natural, first-person answer I can speak out loud.
+
+    Use this context when available:
+    {{candidate_resume}}
+    {{candidate_verified_experience}}
+    {{job_description}}
+    {{manager_notes}}
+    {{company_name}}
+    {{job_title}}
+    {{hiring_manager_research}}
+    {{recruiter_notes}}
+    {{interview_stage}}
+    {{interviewer_question}}
+
+    Never invent experience, technologies, metrics, incidents, employers, dates, responsibilities, or accomplishments. Treat truthful additional technical detail as implementation depth behind existing experience, not as rewritten career history.
+
+    <steps>
+      <step id="1">Internally determine what the interviewer is testing: technical depth, Go/backend, APIs, Kubernetes/cloud, distributed systems, production ownership, system design, debugging, testing, AI-assisted engineering, architecture, behavioral experience, collaboration, ambiguity, leadership, career transitions, motivation, retention, or communication. Do not explain the classification unless it materially helps.</step>
+      <step id="2">Select the strongest verified experience that directly answers the question. Prefer real and recent production ownership, specific technical decisions, and verified outcomes. Choose one strongest example; mention a secondary example only when useful.</step>
+      <step id="3">Generate a live interview answer as 4–7 concise, conversational, first-person bullets. Put the strongest point first, include technologies only when relevant, include one result only when supported, and avoid paragraphs unless requested. End with one strong direct closing sentence. Keep the default answer speakable in about 30–60 seconds.</step>
+      <step id="4">For technical experience questions, use: Problem, What I Owned, Decision, Why, Result. Add architecture, tradeoffs, testing, deployment, monitoring, or production behavior only when relevant. Prioritize engineering judgment over textbook definitions.</step>
+      <step id="5">For production ownership, emphasize design, implementation, testing, deployment, monitoring, troubleshooting, and optimization. Make clear that responsibility did not stop when code merged.</step>
+      <step id="6">For a production incident, use symptom, impact, detection, investigation, root cause, fix, validation, and prevention. Never manufacture an incident. If the source material does not establish one, state **NEED ONE DETAIL FROM YOU:** followed by the single missing fact, then give a safe answer skeleton.</step>
+      <step id="7">For behavioral questions, use compressed STAR: situation, task/ownership, action, result, and lesson when useful. Keep emphasis on my individual contribution.</step>
+      <step id="8">For technical concepts, give **Concept** with 1–3 very short bullets, then **How I've used it** with 2–4 bullets connected to verified production experience. Do not give a textbook lecture.</step>
+      <step id="9">For experience with a technology, use: where I used it, what I built, what I owned, production/deployment responsibility, difficult issue or tradeoff, and result. Show progression across roles rather than overstating use.</step>
+      <step id="10">For system design, give only the next things I should say: requirements/constraints, core entities/data, API boundary, and high-level architecture. Answer follow-ups interactively instead of dumping a full design.</step>
+      <step id="11">For AI-tool questions, emphasize AI as an accelerator, codebase understanding, test generation, refactoring, debugging hypotheses, documentation, critical review, validation, privacy/security awareness, and knowing when not to use AI. I still own design, correctness, testing, security, and production behavior.</step>
+      <step id="12">For why this company or role, combine technical alignment, product/team challenge, company mission, and genuine motivation. Avoid generic praise.</step>
+      <step id="13">For difficult career questions, give 3–5 positive talking points and one concise close. Never criticize a former employer or sound defensive.</step>
+      <step id="14">If I have not done something, do not fake experience. Use the closest relevant experience, transferable concept, and how I would approach the unfamiliar area.</step>
+      <step id="15">For follow-ups, treat prior interview context as active. Do not restart the story; answer only the new layer being probed.</step>
+    </steps>
+  </task>
+  <system-commands>
+    <command>Optimize for real-time use during an active interview.</command>
+    <command>Default to short bullets, put the most useful speaking point first, and use natural first-person language.</command>
+    <command>Never fabricate experience, metrics, incidents, or claims that contradict the submitted resume.</command>
+    <command>If information is missing, give the safest truthful bridge answer rather than inventing a fact.</command>
+    <command>Prefer production judgment over textbook trivia. Do not overload me with information.</command>
+  </system-commands>
+  <output-format>
+    ## LIVE ANSWER
+    - {{speaking_point_1}}
+    - {{speaking_point_2}}
+    - {{speaking_point_3}}
+    - {{speaking_point_4}}
+    - {{optional_supporting_point}}
+    - {{optional_result}}
+
+    **Close:** {{one_sentence_direct_answer}}
+
+    ### IF THEY GO DEEPER
+    - {{likely_followup_1}} — {{short_response_direction}}
+    - {{likely_followup_2}} — {{short_response_direction}}
+  </output-format>
+</poml>`
   };
+
+  function updateInterviewDocumentStatus(resumeDocument = {}, jobDescriptionDocument = {}) {
+    resumeDocumentStatus.textContent = resumeDocument.name ? `Résumé: ${resumeDocument.name}` : "No résumé uploaded.";
+    jobDescriptionDocumentStatus.textContent = jobDescriptionDocument.name ? `Job description: ${jobDescriptionDocument.name}` : "No job description uploaded.";
+  }
+
+  async function uploadInterviewDocument(kind, button) {
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "Processing…";
+    try {
+      const result = await window.electronAPI.uploadInterviewDocument(kind);
+      if (!result?.success) throw new Error(result?.error || "Unable to process the document.");
+      if (result.canceled) return;
+      if (kind === "resume") resumeDocumentStatus.textContent = `Résumé: ${result.document.name}`;
+      else jobDescriptionDocumentStatus.textContent = `Job description: ${result.document.name}`;
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
+  uploadResumeButton.addEventListener("click", () => uploadInterviewDocument("resume", uploadResumeButton));
+  uploadJobDescriptionButton.addEventListener("click", () => uploadInterviewDocument("job-description", uploadJobDescriptionButton));
 
   const EXAMPLE_OUTPUTS = {
     default: {
@@ -376,7 +466,8 @@ const debugSnapshot = "task-001:queued|task-002:done|task-003:queued|task-004:qu
 \`\`\``,
     },
     debug: {
-      prompt: "Review this code and list the most important bugs or regressions first.",
+      prompt: "Preview: horizontal scroll behavior",
+      previewMode: "horizontal",
       content: `Findings
 1. ` + `src/hooks/useSearch.js:18` + ` recreates a debounced callback on every render, so pending calls are lost.
 2. ` + `src/App.jsx:42` + ` mutates the original array before sorting, which can break memoized parents.
@@ -390,8 +481,153 @@ const requestAuditTrail = "GET:/api/search?q=react-hooks-debounce-and-cancellati
 
 Residual risk
 - Search requests still need cancellation if the API is slow.`
+    },
+    "mermaid-flow": {
+      prompt: "Preview: service request flow",
+      content: `Request flow
+
+\`\`\`mermaid
+flowchart LR
+  Client[Client] --> Gateway[API Gateway]
+  Gateway --> Service[Interview Service]
+  Service --> Cache[(Cache)]
+  Service --> DB[(Database)]
+  Service --> Queue[Event Queue]
+\`\`\`
+
+Key point
+- The gateway owns authentication and rate limits; the service stays focused on business logic.`,
+    },
+    "mermaid-sequence": {
+      prompt: "Preview: retry-safe API interaction",
+      content: `Retry-safe request
+
+\`\`\`mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as API
+  participant D as Database
+  C->>A: POST /orders + idempotency key
+  A->>D: Check/store key and create order
+  D-->>A: Order result
+  A-->>C: 201 Created
+  C->>A: Retry with same key
+  A-->>C: Existing order result
+\`\`\`
+
+Key point
+- The idempotency key makes client retries safe without creating duplicates.`,
+    },
+    "mermaid-architecture": {
+      prompt: "Preview: event-driven architecture",
+      content: `Event-driven architecture
+
+\`\`\`mermaid
+flowchart TB
+  API[Public API] --> Worker[Application Worker]
+  Worker --> Store[(Primary Store)]
+  Worker --> Events[Domain Events]
+  Events --> Analytics[Analytics Consumer]
+  Events --> Notifications[Notification Consumer]
+  Worker --> Observe[Logs, Metrics, Traces]
+\`\`\`
+
+Tradeoff
+- Asynchronous consumers improve resilience and throughput, but need idempotency and observable failure handling.`,
     }
   };
+
+  function mermaidExample(title, diagram, note) {
+    return {
+      prompt: `Preview: ${title}`,
+      content: `${title}\n\n\`\`\`mermaid\n${diagram}\n\`\`\`\n\n${note}`,
+    };
+  }
+
+  Object.assign(EXAMPLE_OUTPUTS, {
+    "vertical-scroll": {
+      prompt: "Preview: vertical scroll behavior",
+      content: `Long response preview\n\n${Array.from({ length: 48 }, (_, index) => `${index + 1}. This intentionally long preview item confirms that the chat area scrolls vertically while keeping each response line readable.`).join("\n\n")}\n\nEnd of vertical-scroll preview.`,
+    },
+    "mermaid-class": mermaidExample("Class diagram", `classDiagram
+  class InterviewSession {
+    +string id
+    +start()
+    +end()
+  }
+  class Transcript {
+    +append(text)
+  }
+  InterviewSession --> Transcript`, "Shows types, responsibilities, and relationships."),
+    "mermaid-state": mermaidExample("State diagram", `stateDiagram-v2
+  [*] --> Idle
+  Idle --> Recording: start
+  Recording --> Processing: stop
+  Processing --> Ready: answer generated
+  Ready --> Recording: next question
+  Ready --> [*]`, "Shows the lifecycle of a live interview session."),
+    "mermaid-er": mermaidExample("Entity relationship diagram", `erDiagram
+  CANDIDATE ||--o{ INTERVIEW : attends
+  INTERVIEW ||--o{ QUESTION : contains
+  CANDIDATE {
+    string id
+    string name
+  }
+  QUESTION {
+    string id
+    string text
+  }`, "Shows data entities and their cardinality."),
+    "mermaid-gantt": mermaidExample("Gantt chart", `gantt
+  title Interview preparation plan
+  dateFormat  YYYY-MM-DD
+  section Prep
+  Research company :done, 2026-08-10, 1d
+  Review resume    :active, 2026-08-11, 1d
+  section Interview
+  Hiring manager   :2026-08-12, 1d`, "Shows a schedule and progress over time."),
+    "mermaid-pie": mermaidExample("Pie chart", `pie title Engineering effort
+  "Feature work" : 45
+  "Reliability" : 30
+  "Technical debt" : 25`, "Shows proportional categories."),
+    "mermaid-journey": mermaidExample("User journey", `journey
+  title Candidate interview journey
+  section Prepare
+    Review role: 5: Candidate
+    Rehearse examples: 4: Candidate
+  section Interview
+    Answer question: 4: Candidate, Manager
+    Ask questions: 5: Candidate, Manager`, "Shows experience steps and satisfaction scores."),
+    "mermaid-git": mermaidExample("Git graph", `gitGraph
+  commit id: "setup"
+  branch feature
+  checkout feature
+  commit id: "interview prompt"
+  checkout main
+  merge feature
+  commit id: "release"`, "Shows branches, commits, and merges."),
+    "mermaid-mindmap": mermaidExample("Mindmap", `mindmap
+  root((Interview))
+    Technical
+      System design
+      Debugging
+    Behavioral
+      Leadership
+      Collaboration`, "Shows an idea hierarchy."),
+    "mermaid-requirement": mermaidExample("Requirement diagram", `requirementDiagram
+  requirement live_answers {
+    id: 1
+    text: Answers must be concise
+    risk: medium
+    verifymethod: test
+  }
+  functionalRequirement document_context {
+    id: 2
+    text: Use uploaded resume context
+    risk: high
+    verifymethod: inspection
+  }
+  live_answers - satisfies -> document_context`, "Shows requirements and traceability."),
+  });
 
   async function previewTemplateExample(templateKey) {
     const example = EXAMPLE_OUTPUTS[templateKey];
@@ -404,6 +640,7 @@ Residual risk
       templateKey,
       prompt: example.prompt,
       content: example.content,
+      previewMode: example.previewMode,
     });
   }
 
@@ -440,10 +677,8 @@ Residual risk
     await previewTemplateExample(selected);
   });
 
-  previewDebugTemplateButton.addEventListener("click", async () => {
-    predefinedPromptsSelect.value = "debug";
-    promptInput.value = PREDEFINED_PROMPTS.debug;
-    await previewTemplateExample("debug");
+  previewExampleButton.addEventListener("click", async () => {
+    await previewTemplateExample(previewExampleSelect.value);
   });
 
   // Load current settings
@@ -463,6 +698,7 @@ Residual risk
         }
       }
     }
+    updateInterviewDocumentStatus(settings?.resumeDocument, settings?.jobDescriptionDocument);
     if (settings && settings.model) {
       modelSelect.value = settings.model;
     }
@@ -518,6 +754,7 @@ Residual risk
       outputDeviceId: outputDeviceSelect.value,
       azureSpeechKey: document.getElementById("azureSpeechKey").value.trim(),
       azureSpeechRegion: document.getElementById("azureSpeechRegion").value.trim(),
+      interviewMode: predefinedPromptsSelect.value === "hiring-manager",
     };
 
     try {

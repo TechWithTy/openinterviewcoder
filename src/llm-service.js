@@ -35,21 +35,24 @@ function buildTaskPrompt(userPrompt, configuredPrompt = config.getPrompt()) {
   const normalizedUserPrompt = String(userPrompt || "").trim();
   const normalizedConfiguredPrompt = String(configuredPrompt || "").trim();
 
-  if (!normalizedUserPrompt) {
-    return normalizedConfiguredPrompt || DEFAULT_ANALYSIS_PROMPT;
-  }
-
-  if (
-    !normalizedConfiguredPrompt ||
-    normalizedConfiguredPrompt === DEFAULT_ANALYSIS_PROMPT
-  ) {
-    return normalizedUserPrompt;
-  }
-
-  return `${normalizedConfiguredPrompt}
+  const basePrompt = !normalizedUserPrompt
+    ? normalizedConfiguredPrompt || DEFAULT_ANALYSIS_PROMPT
+    : !normalizedConfiguredPrompt || normalizedConfiguredPrompt === DEFAULT_ANALYSIS_PROMPT
+      ? normalizedUserPrompt
+      : `${normalizedConfiguredPrompt}
 
 --- User Request ---
 ${normalizedUserPrompt}`;
+  return config.getInterviewMode() ? `${basePrompt}${buildInterviewDocumentContext()}` : basePrompt;
+}
+
+function buildInterviewDocumentContext() {
+  const resume = config.getResumeDocument();
+  const jobDescription = config.getJobDescriptionDocument();
+  const sections = [];
+  if (resume.text) sections.push(`RÉSUMÉ (${resume.name || "uploaded résumé"}):\n${resume.text}`);
+  if (jobDescription.text) sections.push(`JOB DESCRIPTION (${jobDescription.name || "uploaded job description"}):\n${jobDescription.text}`);
+  return sections.length ? `\n\n--- Interview Materials (use as factual context) ---\n${sections.join("\n\n")}` : "";
 }
 
 function buildTranscriptionPrompt(source, text) {

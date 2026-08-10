@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Save settings
   saveSettings: (settings) => ipcRenderer.invoke("save-settings", settings),
+  uploadInterviewDocument: (kind) => ipcRenderer.invoke("upload-interview-document", kind),
 
   // Show settings window
   showSettings: () => ipcRenderer.invoke("show-settings"),
