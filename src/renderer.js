@@ -221,9 +221,14 @@ async function flushTranscriptionBuffer(source) {
       pauseMs: transcriptionPauseMs,
       length: payload.length,
     });
-    await getElectronAPI().processTranscription(
+    const result = await getElectronAPI().processTranscription(
       `Source: ${source}, Text: ${payload}`
     );
+    if (!result?.success) {
+      const message = result?.error || "The interview response could not be generated.";
+      debugLog("Transcription response generation failed", { source, message });
+      addErrorMessage(message);
+    }
   } catch (err) {
     console.error("Failed to process transcription with AI:", err);
     debugLog("Buffered transcription processing failed", {
@@ -527,7 +532,15 @@ async function startRecording(type, reason) {
       constraints,
       startConfig,
       type,
-      (text, isFinal) => {
+      (text, isFinal, transcriptType, details) => {
+        if (details?.error) {
+          debugLog(`${sourceLabel} transcription returned no text`, {
+            type: transcriptType || type,
+            message: details.error,
+          });
+          addErrorMessage(`${sourceLabel} transcription: ${details.error}`);
+          return;
+        }
         if (isFinal) {
           debugLog(`${sourceLabel} transcript received`, { length: text?.length || 0 });
           addTranscriptionToChat(sourceLabel, text);

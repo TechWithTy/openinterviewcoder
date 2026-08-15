@@ -281,6 +281,9 @@
               <option value="debug">Code Review: Finding Bugs</option>
               <option value="hiring-manager">Hiring Manager Interview</option>
               <option value="system-design">System Design Interview</option>
+              <option value="goodrx-backend">GoodRx Backend Interview (Go/Kubernetes/AWS)</option>
+              <option value="go-backend-copilot">Real-Time Go Backend Interview Copilot</option>
+              <option value="go-backend-copilot-v2">Real-Time Go Backend Interview Copilot v2 (Coding + Big-O)</option>
             </select>
             <textarea
               id="analysisPrompt"
@@ -328,6 +331,18 @@
             <div id="resumeDocumentStatus" class="api-key-description">No résumé uploaded.</div>
             <div id="jobDescriptionDocumentStatus" class="api-key-description">No job description uploaded.</div>
             <div class="api-key-description">These files are used only when the Hiring Manager Interview prompt is selected.</div>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">OpenAI cloud usage</label>
+          <div class="setting-control">
+            <div class="api-key-description">Real OpenAI organization totals. “Monthly spend left” uses your cloud-configured hard spend limit, not a local budget.</div>
+            <div id="aiUsageLabel" class="api-key-description"></div>
+            <div id="transcriptionUsageLabel" class="api-key-description"></div>
+            <div id="costUsageLabel" class="api-key-description"></div>
+            <div id="remainingUsageLabel" class="api-key-description"></div>
+            <button type="button" id="refreshUsageButton" class="preview-button" style="margin-top:8px">Refresh OpenAI usage</button>
           </div>
         </div>
       </div>

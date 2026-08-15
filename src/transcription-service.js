@@ -153,6 +153,14 @@ async function startTranscription(streamOrConstraints, recordingConfig, type, on
     const mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === "suspended") {
+      try {
+        await audioContext.resume();
+        console.log(`[transcription:${type}] audio context resumed`);
+      } catch (error) {
+        console.warn(`[transcription:${type}] could not resume audio context`, error);
+      }
+    }
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 2048;
@@ -191,9 +199,14 @@ async function startTranscription(streamOrConstraints, recordingConfig, type, on
           audioBase64,
           mimeType: chunk.mimeType,
           type,
+          durationMs: chunk.durationMs,
         });
         if (result?.success && result.text && !session.stopped) {
           onTranscript(result.text, true, type);
+        } else if (!session.stopped) {
+          const error = result?.error || "No speech was recognized in this audio segment.";
+          console.error(`[transcription:${type}] transcription returned no text`, error);
+          onTranscript("", true, type, { error });
         }
       } catch (error) {
         console.error(`[transcription:${type}] chunk transcription failed`, error);
@@ -217,6 +230,7 @@ async function startTranscription(streamOrConstraints, recordingConfig, type, on
       session.chunkQueue.push({
         blob: event.data,
         mimeType: event.data.type || mimeType || "audio/webm",
+        durationMs: Math.max(0, Date.now() - session.segmentStartedAt),
       });
       drainQueue();
     };

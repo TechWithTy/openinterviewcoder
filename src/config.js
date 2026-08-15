@@ -28,7 +28,8 @@ const store = new Store({
 });
 
 module.exports = {
-  getOpenAIKey: () => process.env.OPEN_API_KEY || process.env.OPENAI_API_KEY || store.get("openai.apiKey") || "",
+  getOpenAIKey: () => process.env.OPEN_API_KEY || process.env.OPENAI_API_KEY || process.env.WHISPER_API_KEY_1 || store.get("openai.apiKey") || "",
+  getOpenAIAdminKey: () => process.env.OPEN_API_ADMIN_KEY || process.env.OPENAI_ADMIN_KEY || "",
   setOpenAIKey: (key) => store.set("openai.apiKey", key),
   hasOpenAIKey: () => !!store.get("openai.apiKey"),
   getPrompt: () => store.get("openai.prompt") || "Analyze this screenshot and provide insights.",

@@ -20,7 +20,7 @@ const {
   captureFullScreen,
   getRecentScreenshots,
 } = require("./screenshot");
-const { initializeLLMService } = require("./llm-service");
+const { initializeLLMService, getOrganizationUsage } = require("./llm-service");
 const { extractDocument } = require("./document-service");
 const config = require("./config");
 
@@ -308,6 +308,8 @@ ipcMain.handle("save-settings", async (event, settings) => {
   await initializeLLMService();
   return true;
 });
+
+ipcMain.handle("get-openai-usage", () => getOrganizationUsage());
 
 ipcMain.handle("upload-interview-document", async (event, kind) => {
   const isResume = kind === "resume";

@@ -7,7 +7,15 @@ const DEFAULT_ANALYSIS_PROMPT = "Analyze this screenshot and provide insights.";
 const MERMAID_GUIDANCE = `
 
 --- Diagram Guidance ---
-When a diagram would materially clarify architecture, sequence, state, relationships, a workflow, or a timeline, include one concise Mermaid diagram in a fenced \`\`\`mermaid block. Choose the most suitable Mermaid chart type (for example flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, gantt, pie, journey, gitGraph, or mindmap). Do not add a diagram when concise prose or code is clearer, and never invent facts solely to fill a diagram.`;
+When a diagram would materially clarify architecture, sequence, state, relationships, a workflow, or a timeline, include one concise Mermaid diagram in a fenced \`\`\`mermaid block. Choose the most suitable Mermaid chart type (for example flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, gantt, pie, journey, gitGraph, or mindmap). Do not add a diagram when concise prose or code is clearer, and never invent facts solely to fill a diagram.
+
+Mermaid must be valid for Mermaid 9.4. Use only simple, supported syntax: ASCII node IDs, short plain-text labels, and standard arrows. For an architecture diagram, prefer this safe shape:
+\`\`\`mermaid
+flowchart LR
+  Client[Client] --> API[API service]
+  API --> DB[(Database)]
+\`\`\`
+Do not use Markdown, code fences, HTML, template placeholders, unsupported diagram types, or unverified facts inside the Mermaid definition.`;
 const SYSTEM_DESIGN_MERMAID_REQUIREMENT = `
 
 --- System Design Diagram Requirement ---
@@ -43,6 +51,96 @@ Format your responses in sections:
 
 let isInitialized = false;
 
+async function getOrganizationUsage() {
+  const adminKey = config.getOpenAIAdminKey();
+  if (!adminKey) return { success: false, error: "OpenAI admin key is not configured." };
+  const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+  const now = new Date();
+  const monthStartTime = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
+  const headers = {
+    Authorization: `Bearer ${adminKey}`,
+    "Content-Type": "application/json",
+  };
+  try {
+    const [completionResponse, audioResponse, costResponse, spendLimitResponse, monthCostResponse] = await Promise.all([
+      fetch(`https://api.openai.com/v1/organization/usage/completions?start_time=${startTime}&bucket_width=1d&limit=31`, { headers }),
+      fetch(`https://api.openai.com/v1/organization/usage/audio_transcriptions?start_time=${startTime}&bucket_width=1d&limit=31`, { headers }),
+      fetch(`https://api.openai.com/v1/organization/costs?start_time=${startTime}&limit=31`, { headers }),
+      fetch("https://api.openai.com/v1/organization/spend_limit", { headers }),
+      fetch(`https://api.openai.com/v1/organization/costs?start_time=${monthStartTime}&limit=31`, { headers }),
+    ]);
+    const readResponse = async (response, label) => {
+      if (response.ok) return { data: await response.json(), error: "" };
+      const body = await response.text();
+      let message = "";
+      try {
+        message = JSON.parse(body)?.error?.message || "";
+      } catch (_) {
+        message = body;
+      }
+      if (response.status === 401) {
+        return {
+          data: null,
+          error: "OpenAI rejected OPEN_API_ADMIN_KEY. Create a valid read-only Organization Admin key (sk-admin-...) and replace the current value, then restart the app.",
+        };
+      }
+      if (response.status === 403) {
+        return {
+          data: null,
+          error: `${label}: OPEN_API_ADMIN_KEY is recognized but is not authorized for this organization resource.`,
+        };
+      }
+      if (response.status === 404 && label === "Spend-limit request failed") {
+        return {
+          data: null,
+          error: "No organization hard spend limit is configured in OpenAI.",
+        };
+      }
+      return { data: null, error: `${label} (${response.status}): ${message || "Unknown API error"}` };
+    };
+    const [completion, audioUsage, costsUsage, spendLimit, monthCosts] = await Promise.all([
+      readResponse(completionResponse, "AI usage request failed"),
+      readResponse(audioResponse, "Transcription usage request failed"),
+      readResponse(costResponse, "Costs request failed"),
+      readResponse(spendLimitResponse, "Spend-limit request failed"),
+      readResponse(monthCostResponse, "Current-month costs request failed"),
+    ]);
+    const sumResults = (payload, fields) => (payload.data || []).reduce(
+      (total, bucket) => total + (bucket.results || []).reduce(
+        (bucketTotal, result) => bucketTotal + fields.reduce((value, field) => value + (Number(result[field]) || 0), 0),
+        0
+      ),
+      0
+    );
+    const sumCosts = (payload) => (payload?.data || []).reduce(
+      (total, bucket) => total + (bucket.results || []).reduce(
+        (bucketTotal, result) => bucketTotal + (Number(result.amount?.value) || 0), 0),
+      0
+    );
+    const hardLimitUsd = spendLimit.data ? Number(spendLimit.data.threshold_amount) / 100 : null;
+    const currentMonthCostsUsd = monthCosts.data ? sumCosts(monthCosts.data) : null;
+    const remainingMonthlySpendUsd = hardLimitUsd !== null && currentMonthCostsUsd !== null
+      ? Math.max(0, hardLimitUsd - currentMonthCostsUsd)
+      : null;
+    const errors = [...new Set([completion.error, audioUsage.error, costsUsage.error, monthCosts.error].filter(Boolean))];
+    return {
+      success: completion.data !== null || audioUsage.data !== null || costsUsage.data !== null,
+      aiTokensUsed: completion.data ? sumResults(completion.data, ["input_tokens", "output_tokens"]) : null,
+      transcriptionSecondsUsed: audioUsage.data ? sumResults(audioUsage.data, ["seconds", "audio_seconds", "num_seconds"]) : null,
+      costsUsd: costsUsage.data ? sumCosts(costsUsage.data) : null,
+      currentMonthCostsUsd,
+      hardLimitUsd,
+      remainingMonthlySpendUsd,
+      hardLimitEnforced: spendLimit.data?.enforcement?.status === "enforcing",
+      spendLimitError: spendLimit.error,
+      source: "OpenAI organization usage (last 30 days)",
+      error: errors.join(" | "),
+    };
+  } catch (error) {
+    return { success: false, error: `OpenAI usage request failed: ${error.message}` };
+  }
+}
+
 function buildTaskPrompt(userPrompt, configuredPrompt = config.getPrompt()) {
   const normalizedUserPrompt = String(userPrompt || "").trim();
   const normalizedConfiguredPrompt = String(configuredPrompt || "").trim();
@@ -61,7 +159,7 @@ ${normalizedUserPrompt}`;
   const isSystemDesignPrompt = /Real-Time System Design Interview Copilot/i.test(
     normalizedConfiguredPrompt
   );
-  const isHiringManagerPrompt = /Real-Time Software Engineering Interview Copilot/i.test(
+  const isHiringManagerPrompt = /Real-Time Software Engineering Interview Copilot|GoodRx Backend Software Engineer interview|Real-Time Go Backend Interview Copilot/i.test(
     normalizedConfiguredPrompt
   );
   return `${basePrompt}${interviewContext}${MERMAID_GUIDANCE}${
@@ -72,6 +170,16 @@ ${normalizedUserPrompt}`;
 function buildInterviewDocumentContext() {
   const resume = config.getResumeDocument();
   const jobDescription = config.getJobDescriptionDocument();
+  const resolvedSections = [];
+  if (resume.text) {
+    resolvedSections.push(`RESOLVED {{candidate_resume}} — ${resume.name || "uploaded resume"}:\n${resume.text}`);
+  }
+  if (jobDescription.text) {
+    resolvedSections.push(`RESOLVED {{job_description}} — ${jobDescription.name || "uploaded job description"}:\n${jobDescription.text}`);
+  }
+  if (resolvedSections.length) {
+    return `\n\n--- Resolved Interview Materials: Required Factual Context ---\nUse these documents before answering. When the question calls for personal experience and the material supports it, ground the answer in at least one specific verified employer, project, technology, responsibility, or metric from this context. Do not force a detail that is irrelevant, and never invent one.\n\n${resolvedSections.join("\n\n")}`;
+  }
   const sections = [];
   if (resume.text) sections.push(`RÉSUMÉ (${resume.name || "uploaded résumé"}):\n${resume.text}`);
   if (jobDescription.text) sections.push(`JOB DESCRIPTION (${jobDescription.name || "uploaded job description"}):\n${jobDescription.text}`);
@@ -168,7 +276,7 @@ function mimeTypeToFilename(mimeType) {
   return "chunk.webm";
 }
 
-async function transcribeAudioChunk({ audioBase64, mimeType, type }) {
+async function transcribeAudioChunk({ audioBase64, mimeType, type, durationMs }) {
   const apiKey = config.getOpenAIKey();
   if (!audioBase64) {
     throw new Error("Missing audio payload");
@@ -586,6 +694,7 @@ async function makeLLMRequest(event, data) {
 
 module.exports = {
   initializeLLMService,
+  getOrganizationUsage,
   __test__: {
     buildTaskPrompt,
     buildTranscriptionPrompt,
