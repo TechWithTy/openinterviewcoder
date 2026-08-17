@@ -1203,6 +1203,15 @@ function registerShortcuts() {
     invisibleWindow?.webContents.send("copy-chat-transcript");
   });
 
+  globalShortcut.register("CommandOrControl+Alt+Shift+V", () => {
+    const text = clipboard.readText().trim();
+    logEvent("shortcut", "Clipboard prompt shortcut triggered", { length: text.length });
+    showInvisibleWindow("shortcut:clipboard-prompt");
+    invisibleWindow?.webContents.send("process-clipboard-text", {
+      text,
+    });
+  });
+
   // Dark mode shortcut. Ctrl/Cmd + Shift + D may be taken by other apps,
   // so we register a fallback combination if the primary accelerator is unavailable.
   const toggleDarkMode = () => {

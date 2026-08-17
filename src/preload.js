@@ -77,6 +77,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("copy-last-ai-output", () => callback()),
   onCopyChatTranscript: (callback) =>
     ipcRenderer.on("copy-chat-transcript", () => callback()),
+  onProcessClipboardText: (callback) =>
+    ipcRenderer.on("process-clipboard-text", (event, payload) => callback(payload)),
 
   // Window position
   onWindowPositionChanged: (callback) =>

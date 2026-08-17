@@ -56,6 +56,8 @@ Two or three concise likely interviewer questions, each with the next implementa
 
 Start by making a reasonable, explicitly stated assumption and giving the concise approach summary before code; do not wait for clarification unless it is impossible to produce a correct first slice safely. Preserve the exact public contract named by the interviewer: do not rename requested functions, methods, fields, paths, or operations, and do not specialize a general data structure into an unrelated domain such as images. Add code comments only for non-obvious choices, invariants, concurrency boundaries, or framework behavior; do not clutter the code with narration. If tests are requested, TYPE THIS must include at least one actual Go \`func Test...\` in a clearly labeled \`_test.go\` code block. A \`main\` function, sleep, curl command, or manual demonstration never substitutes for the requested test. When background cleanup or timers are used, make lifecycle ownership explicit with Stop or Close and avoid one long-lived goroutine per entry unless the interviewer specifically chooses that tradeoff. Stop after the smallest useful vertical implementation step unless the interviewer explicitly requests the complete solution. If a test is requested, include one focused test in this step when practical; otherwise make the next command validate the behavior and explicitly state the next test to add. Always include the concise Mermaid diagram after the implementation, then clarifications and likely follow-ups. Do NOT output Quick Summary, Key Points, Suggested Actions, Technical Notes, generic architecture overviews, study/documentation recommendations, humor, jokes, novelty text, or long introductions.
 
+Go source file contract: every complete Go source file MUST begin with its correct \`package <name>\` declaration before imports. If the interviewer names a package, use it exactly; otherwise use \`package main\` only for an executable and a matching library package for library code. A requested test file uses the matching package unless an external \`_test\` package is explicitly requested. Before responding, verify the requested package, type names, public functions, method signatures, and test-file requirements against the interviewer request.
+
 Explicit interviewer instructions are non-negotiable. Obey constraints in this order: explicit interviewer instructions; explicit framework/library; explicit language; functional requirements; testing; production quality; job preferences; general best practices. Never replace a requested framework with another implementation. Gin, Echo, Fiber, Chi, and other Go libraries are allowed when explicitly requested or when a framework choice is appropriate to the stated task; state the reason for the choice briefly. Preserve the interviewer-provided domain names, endpoint paths, fields, and constraints exactly; never invent a different domain, field, API, sample value, or humorous behavior. If the transcript does not establish a stable implementation task or framework name, ask the candidate to repeat the one missing detail rather than writing unrelated code. For a framework request, import it and use its idiomatic routing, typed models, validation, and generated documentation/schema features where applicable. If a framework name is incomplete or uncertain after transcription, ask one concise clarification question instead of guessing or substituting a framework.`;
 const PRACTICAL_GO_TECHNICAL_SCREEN_REQUIREMENT = `
 
@@ -140,20 +142,119 @@ function extractRequiredGoSymbols(prompt) {
   return [...symbols];
 }
 
+function extractRequiredGoPackage(prompt) {
+  const request = getDirectRequestText(prompt);
+  const match = request.match(/\bpackage\s+(?:named\s+)?`?([a-z][a-z0-9_]*)`?/i);
+  return match ? match[1] : "";
+}
+
+function extractRequiredGoSignatures(prompt) {
+  const request = getDirectRequestText(prompt);
+  const codeTerms = request.match(/`[^`]+`/g) || [];
+  return codeTerms
+    .map((term) => term.slice(1, -1).replace(/\s+/g, " ").trim())
+    .filter((term) => /^[A-Z][A-Za-z0-9_]*\s*\(/.test(term));
+}
+
+function extractRequiredGoTypes(prompt) {
+  const request = getDirectRequestText(prompt);
+  return [...request.matchAll(/\btype\s+`?([A-Z][A-Za-z0-9_]*)`?/g)]
+    .map((match) => match[1]);
+}
+
+function extractRequiredGoFiles(prompt) {
+  const request = getDirectRequestText(prompt);
+  return [...new Set((request.match(/\b[A-Za-z0-9_-]+(?:_test)?\.go\b/g) || []))];
+}
+
+function levenshteinDistance(left, right) {
+  const source = String(left || "");
+  const target = String(right || "");
+  const previous = Array.from({ length: target.length + 1 }, (_, index) => index);
+
+  for (let sourceIndex = 1; sourceIndex <= source.length; sourceIndex += 1) {
+    let diagonal = previous[0];
+    previous[0] = sourceIndex;
+    for (let targetIndex = 1; targetIndex <= target.length; targetIndex += 1) {
+      const saved = previous[targetIndex];
+      previous[targetIndex] = Math.min(
+        previous[targetIndex] + 1,
+        previous[targetIndex - 1] + 1,
+        diagonal + (source[sourceIndex - 1] === target[targetIndex - 1] ? 0 : 1)
+      );
+      diagonal = saved;
+    }
+  }
+  return previous[target.length];
+}
+
+function correctNearMissedRequiredGoSymbols(content, prompt) {
+  let corrected = String(content || "");
+
+  // This is a recurrent model typo in constructor names. It is never a valid
+  // spelling in the Go API we want the candidate to type, so fix it even when
+  // transcription omitted the explicit NewProcessor contract.
+  corrected = corrected.replace(/\bNewProceassor\b/g, "NewProcessor");
+
+  const requiredSymbols = extractRequiredGoSymbols(prompt);
+  const candidateSymbols = [...new Set(corrected.match(/\b[A-Z][A-Za-z0-9_]*\b/g) || [])];
+
+  requiredSymbols.forEach((requiredSymbol) => {
+    if (new RegExp(`\\b${requiredSymbol}\\s*\\(`).test(corrected)) return;
+    const nearMatch = candidateSymbols.find((candidate) =>
+      candidate !== requiredSymbol &&
+      levenshteinDistance(candidate, requiredSymbol) <= 2
+    );
+    if (nearMatch) {
+      corrected = corrected.replace(new RegExp(`\\b${nearMatch}\\b`, "g"), requiredSymbol);
+    }
+  });
+
+  return corrected;
+}
+
 function getLiveCodingOutputViolations(content, prompt) {
   const response = String(content || "");
   const request = getDirectRequestText(prompt);
   const violations = [];
   const requiredSymbols = extractRequiredGoSymbols(request);
+  const requiredPackage = extractRequiredGoPackage(request);
+  const requiredSignatures = extractRequiredGoSignatures(request);
+  const requiredTypes = extractRequiredGoTypes(request);
+  const requiredFiles = extractRequiredGoFiles(request);
+
+  if (requiredPackage && !new RegExp(`^\\s*package\\s+${requiredPackage}\\b`, "m").test(response)) {
+    violations.push(`missing required Go package declaration package ${requiredPackage}`);
+  }
 
   requiredSymbols.forEach((symbol) => {
     if (!new RegExp(`\\b${symbol}\\s*\\(`).test(response)) {
       violations.push(`missing required public Go API ${symbol}`);
     }
   });
+  requiredSignatures.forEach((signature) => {
+    const normalizedResponse = response.replace(/\s+/g, " ");
+    if (!normalizedResponse.includes(signature)) {
+      violations.push(`missing required Go signature ${signature}`);
+    }
+  });
+  requiredTypes.forEach((typeName) => {
+    if (!new RegExp(`\\btype\\s+${typeName}\\s+(?:struct|interface)\\b`).test(response)) {
+      violations.push(`missing required Go type ${typeName}`);
+    }
+  });
+  requiredFiles.forEach((fileName) => {
+    if (!response.includes(fileName)) {
+      violations.push(`missing required Go file ${fileName}`);
+    }
+  });
   if (/\b(test|tests|testing)\b/i.test(request) &&
       (!/func\s+Test[A-Za-z0-9_]*/.test(response) || !/_test\.go/.test(response))) {
     violations.push("missing requested Go test file and func Test");
+  }
+  if (/\bconcurrent(?:ly)?\s+(?:calls?|processing|process)/i.test(request) &&
+      !/func\s+Test[A-Za-z0-9_]*Concurrent/i.test(response)) {
+    violations.push("missing requested concurrent-processing Go test");
   }
   if (/\bdo not use http\b/i.test(request) && /(?:net\/http|gin-gonic|\bgin\.)/.test(response)) {
     violations.push("used HTTP or a framework despite the no-HTTP requirement");
@@ -824,7 +925,9 @@ async function makeLLMRequest(event, data) {
       throw new Error("Empty response from OpenAI");
     }
 
-    let content = response.data.choices[0].message.content;
+    let content = isLiveCodingRequest
+      ? correctNearMissedRequiredGoSymbols(response.data.choices[0].message.content, data.prompt)
+      : response.data.choices[0].message.content;
     const violations = isLiveCodingRequest
       ? getLiveCodingOutputViolations(content, data.prompt)
       : [];
@@ -850,7 +953,36 @@ async function makeLLMRequest(event, data) {
         },
       });
       const repairedContent = repairResponse.data?.choices?.[0]?.message?.content;
-      if (repairedContent) content = repairedContent;
+      if (repairedContent) {
+        content = correctNearMissedRequiredGoSymbols(repairedContent, data.prompt);
+      }
+
+      const remainingViolations = getLiveCodingOutputViolations(content, data.prompt);
+      if (remainingViolations.length > 0) {
+        const finalRepairResponse = await axios({
+          method: "post",
+          url: "https://api.openai.com/v1/chat/completions",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          data: {
+            ...requestData,
+            messages: [
+              ...messages,
+              { role: "assistant", content },
+              {
+                role: "user",
+                content: `Your previous repair is still invalid: ${remainingViolations.join("; ")}. Return the entire corrected answer only. These are hard requirements, not suggestions: preserve the exact requested Go package, public type names, function and method names, and actual _test.go code with func Test when tests were requested.`,
+              },
+            ],
+          },
+        });
+        const finalRepairedContent = finalRepairResponse.data?.choices?.[0]?.message?.content;
+        if (finalRepairedContent) {
+          content = correctNearMissedRequiredGoSymbols(finalRepairedContent, data.prompt);
+        }
+      }
     }
     const messageId = Date.now().toString();
 
@@ -867,7 +999,7 @@ async function makeLLMRequest(event, data) {
       messageId,
       content, // Add content to result for test-response
       provider: "openai",
-      model: "gpt-4o-mini",
+      model: selectedModel,
       status: "completed",
     };
   } catch (error) {
@@ -914,6 +1046,12 @@ module.exports = {
     isLowSignalTranscription,
     getDirectRequestText,
     extractRequiredGoSymbols,
+    extractRequiredGoPackage,
+    extractRequiredGoSignatures,
+    extractRequiredGoTypes,
+    extractRequiredGoFiles,
+    levenshteinDistance,
+    correctNearMissedRequiredGoSymbols,
     getLiveCodingOutputViolations,
     buildLiveCodingSystemPrompt,
   },

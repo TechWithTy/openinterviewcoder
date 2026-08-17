@@ -154,12 +154,42 @@ test.describe("LLM prompt composition", () => {
   });
 
   test("detects coding drafts that change the requested Go contract or omit tests", () => {
-    const request = "Build a queue with Enqueue(task string) error, Dequeue() (string, error), and Close(). Do not use HTTP. Include tests.";
+    const request = "Build a queue in package subscriptions with Enqueue(task string) error, Dequeue() (string, error), and Close(). Do not use HTTP. Include tests.";
     const invalidDraft = "package crypto\nfunc Task(task string) error { return nil }\nfunc Close() {}";
     const violations = __test__.getLiveCodingOutputViolations(invalidDraft, request);
 
     expect(violations).toContain("missing required public Go API Enqueue");
     expect(violations).toContain("missing required public Go API Dequeue");
     expect(violations).toContain("missing requested Go test file and func Test");
+    expect(violations).toContain("missing required Go package declaration package subscriptions");
+  });
+
+  test("detects renamed Go types, signatures, files, and concurrent tests", () => {
+    const request = "In `processor.go`, implement `type SubscriptionEvent`, `NewProcessor() *Processor`, `Process(event SubscriptionEvent) error`, and `Events(subscriptionID string) []SubscriptionEvent`. In `processor_test.go`, add a concurrent processing test.";
+    const invalidDraft = "// subscriptions/subscriptions.go\npackage subscriptions\ntype Subscription struct{}\nfunc NewProcessor(types []string) *Processor { return nil }\nfunc (p *Processor) Process(event Subscription) error { return nil }\nfunc TestProcessorDuplicate(t *testing.T) {}";
+    const violations = __test__.getLiveCodingOutputViolations(invalidDraft, request);
+
+    expect(violations).toContain("missing required Go type SubscriptionEvent");
+    expect(violations).toContain("missing required Go signature NewProcessor() *Processor");
+    expect(violations).toContain("missing required Go signature Process(event SubscriptionEvent) error");
+    expect(violations).toContain("missing required Go signature Events(subscriptionID string) []SubscriptionEvent");
+    expect(violations).toContain("missing required Go file processor.go");
+    expect(violations).toContain("missing required Go file processor_test.go");
+    expect(violations).toContain("missing requested concurrent-processing Go test");
+  });
+
+  test("corrects a close misspelling of a required public Go API", () => {
+    const request = "Implement `NewProcessor() *Processor` and `Process(event Event) error`.";
+    const draft = "func NewProceassor() *Processor { return nil }\nfunc Process(event Event) error { return nil }";
+
+    expect(__test__.correctNearMissedRequiredGoSymbols(draft, request))
+      .toContain("func NewProcessor() *Processor");
+  });
+
+  test("corrects the NewProcessor typo even when transcription omitted the contract", () => {
+    const draft = "processor := NewProceassor()";
+
+    expect(__test__.correctNearMissedRequiredGoSymbols(draft, "Process subscription events."))
+      .toBe("processor := NewProcessor()");
   });
 });

@@ -409,6 +409,14 @@ function setupEventListeners() {
   electronAPI.onCopyChatTranscript?.(() => {
     copyTextToClipboard(getChatTranscript(), "Chat transcript").catch((error) => addErrorMessage(error.message));
   });
+  electronAPI.onProcessClipboardText?.(({ text } = {}) => {
+    const prompt = String(text || "").trim();
+    if (!prompt) {
+      addErrorMessage("Clipboard is empty. Copy a prompt first, then press Ctrl+Alt+Shift+V.");
+      return;
+    }
+    handleTestResponse(prompt);
+  });
 
   // Handle dark mode toggle
   electronAPI.onToggleDarkMode(() => {
