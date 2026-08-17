@@ -88,6 +88,35 @@ test.describe("Mermaid graph rendering", () => {
     await expect(svgLocator).toBeVisible({ timeout: 5000 });
   });
 
+  test("renders a live-coding response diagram after a Go code block", async () => {
+    const mockContent = [
+      "## TYPE THIS",
+      "```go",
+      "package main",
+      "```",
+      "",
+      "## DIAGRAM",
+      "```mermaid",
+      "flowchart TD",
+      "  Client[Client] --> API[Alerts API]",
+      "  API --> Validate[Validate Request]",
+      "  Validate --> Store[Memory Store]",
+      "  Store --> Response[Return Alert]",
+      "```",
+    ].join("\n");
+
+    await window.evaluate((content) => {
+      window.__rendererTestHooks.updateMessage({
+        messageId: "live-coding-mermaid-1",
+        content,
+        isComplete: true,
+      });
+    }, mockContent);
+
+    const messageLocator = window.locator('[data-message-id="live-coding-mermaid-1"]');
+    await expect(messageLocator.locator("div.mermaid svg")).toBeVisible({ timeout: 5000 });
+  });
+
   test("preserves access to wide assistant output instead of clipping it", async () => {
     const mockContent = `const wide = "${"x".repeat(600)}";`;
 

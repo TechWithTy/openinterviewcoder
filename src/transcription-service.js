@@ -150,7 +150,6 @@ async function startTranscription(streamOrConstraints, recordingConfig, type, on
 
     const mimeType = pickMimeType();
     const recorderOptions = mimeType ? { mimeType } : undefined;
-    const mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     if (audioContext.state === "suspended") {
@@ -170,7 +169,7 @@ async function startTranscription(streamOrConstraints, recordingConfig, type, on
     const now = Date.now();
     const session = {
       stream,
-      mediaRecorder,
+      mediaRecorder: null,
       audioContext,
       source,
       analyser,
@@ -218,94 +217,58 @@ async function startTranscription(streamOrConstraints, recordingConfig, type, on
       }
     };
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (session.stopped || !event.data || event.data.size === 0) {
-        return;
-      }
-      console.log(
-        `[transcription:${type}] segment captured`,
-        event.data.type || mimeType || "audio/webm",
-        event.data.size
-      );
-      session.chunkQueue.push({
-        blob: event.data,
-        mimeType: event.data.type || mimeType || "audio/webm",
-        durationMs: Math.max(0, Date.now() - session.segmentStartedAt),
-      });
-      drainQueue();
+    const startRecorderSegment = () => {
+      if (session.stopped) return;
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
+      session.mediaRecorder = mediaRecorder;
+      const startedAt = Date.now();
+      session.segmentStartedAt = startedAt;
+      session.lastSoundAt = startedAt;
+      session.hadSoundSinceSegmentStart = false;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (session.stopped || !event.data || event.data.size === 0) return;
+        console.log(
+          `[transcription:${type}] segment captured`,
+          event.data.type || mimeType || "audio/webm",
+          event.data.size
+        );
+        session.chunkQueue.push({
+          blob: event.data,
+          mimeType: event.data.type || mimeType || "audio/webm",
+          durationMs: Math.max(0, Date.now() - startedAt),
+        });
+        drainQueue();
+      };
+      mediaRecorder.onerror = (event) => {
+        console.error(`[transcription:${type}] MediaRecorder error`, event.error);
+        stopTranscription(type);
+      };
+      mediaRecorder.onstop = () => startRecorderSegment();
+      mediaRecorder.start();
     };
 
-    mediaRecorder.onerror = (event) => {
-      console.error(`[transcription:${type}] MediaRecorder error`, event.error);
-      stopTranscription(type);
-    };
-
-    mediaRecorder.onstop = () => {
-      if (session.stopped) {
-        return;
-      }
-      try {
-        if (mediaRecorder.state === "inactive") {
-          const restartAt = Date.now();
-          session.segmentStartedAt = restartAt;
-          session.lastSoundAt = restartAt;
-          session.hadSoundSinceSegmentStart = false;
-          mediaRecorder.start();
-        }
-      } catch (error) {
-        console.error(`[transcription:${type}] Failed to restart recorder`, error);
-      }
-    };
-
-    mediaRecorder.start();
+    startRecorderSegment();
 
     session.monitorTimer = setInterval(() => {
-      if (session.stopped || mediaRecorder.state !== "recording") {
-        return;
-      }
-
+      const mediaRecorder = session.mediaRecorder;
+      if (session.stopped || !mediaRecorder || mediaRecorder.state !== "recording") return;
       const rms = computeRms(session.analyser, session.sampleBuffer);
       const timeNow = Date.now();
       const segmentAge = timeNow - session.segmentStartedAt;
-
       if (rms >= SILENCE_RMS_THRESHOLD) {
         session.lastSoundAt = timeNow;
         session.hadSoundSinceSegmentStart = true;
       }
-
       const silenceAge = timeNow - session.lastSoundAt;
-      const shouldCutOnSilence =
-        session.hadSoundSinceSegmentStart &&
-        segmentAge >= MIN_SEGMENT_MS &&
-        silenceAge >= session.pauseMs;
-      const shouldCutOnRealtimeCadence =
-        segmentAge >= session.streamSegmentMs;
-      const shouldCutOnMaxAge = segmentAge >= MAX_SEGMENT_MS;
-      const hasBacklog = session.inFlight || session.chunkQueue.length >= 2;
-
-      const shouldCut =
-        shouldCutOnMaxAge ||
-        ((shouldCutOnSilence || shouldCutOnRealtimeCadence) && !hasBacklog);
-
+      const shouldCut = segmentAge >= MAX_SEGMENT_MS ||
+        (session.hadSoundSinceSegmentStart && segmentAge >= MIN_SEGMENT_MS && silenceAge >= session.pauseMs) ||
+        (segmentAge >= session.streamSegmentMs && !session.inFlight && session.chunkQueue.length < 2);
       if (shouldCut) {
-        const reason = shouldCutOnMaxAge
-          ? "max-age"
-          : shouldCutOnSilence
-            ? "silence"
-            : "realtime";
-        console.log(`[transcription:${type}] closing segment`, {
-          reason,
-          rms: Number(rms.toFixed(4)),
-          silenceAge,
-          segmentAge,
-          pauseMs: session.pauseMs,
-          streamSegmentMs: session.streamSegmentMs,
-          hasBacklog,
-        });
         try {
           mediaRecorder.stop();
         } catch (error) {
-          console.error(`[transcription:${type}] Failed to close segment`, error);
+          console.error(`[transcription:${type}] Failed to close recorder segment`, error);
         }
       }
     }, MONITOR_INTERVAL_MS);

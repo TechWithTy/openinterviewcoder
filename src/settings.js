@@ -3,6 +3,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const openaiKeyInput = document.getElementById("openaiKey");
   const promptInput = document.getElementById("analysisPrompt");
   const modelSelect = document.getElementById("modelSelect");
+  const visionModelSelect = document.getElementById("visionModelSelect");
+  const visionModelContainer = document.getElementById("visionModelContainer");
   const saveButton = document.getElementById("saveButton");
   const predefinedPromptsSelect = document.getElementById("predefinedPrompts");
   const previewSelectedTemplateButton = document.getElementById(
@@ -41,6 +43,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     !previewExampleSelect ||
     !previewExampleButton ||
     !modelSelect ||
+    !visionModelSelect ||
+    !visionModelContainer ||
     !twoStepCheck ||
     !renderAssistantHtmlCheck ||
     !autoDetectInputCheck ||
@@ -91,8 +95,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     outputDeviceContainer.style.display = autoDetectOutputCheck.checked ? 'none' : 'flex';
   }
 
+  function toggleVisionModelSelector() {
+    visionModelContainer.style.display = twoStepCheck.checked ? "block" : "none";
+  }
+
   autoDetectInputCheck.addEventListener('change', toggleDeviceSelectors);
   autoDetectOutputCheck.addEventListener('change', toggleDeviceSelectors);
+  twoStepCheck.addEventListener("change", toggleVisionModelSelector);
 
   // Predefined prompt templates
   const PREDEFINED_PROMPTS = {
@@ -451,6 +460,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   </output-format>
 </poml>`,
     "go-backend-copilot-v2": `<poml>
+  <prompt-profile>go-backend-copilot-v2</prompt-profile>
   <let name="candidate_resume">{{candidate_resume}}</let>
   <let name="job_description">{{job_description}}</let>
   <let name="interview_transcript">{{interview_transcript}}</let>
@@ -462,16 +472,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   <task>
     Assist me live. Read the supplied resume, job description, additional verified experience, and active transcript before answering. Do not ask for facts already in context. Use real experience only for personal claims; general engineering knowledge may explain a concept or solution but never become invented candidate history.
 
-    Default to concise, senior, first-person, production-oriented speaking bullets. For technical experience, architecture, API, reliability, cloud, Kubernetes, distributed-system, or production questions, include exactly one concise valid Mermaid 9.4 diagram when a system or flow is described. Use simple ASCII IDs and supported syntax only. Do not add a diagram for purely behavioral questions.
+    <technical-screen-focus>
+      This interview is a 60-minute practical backend Go live-coding screen, not a LeetCode or broad system-design session. Demonstrate real hands-on Go depth through a working vertical slice, clear structure, explicit validation and errors, relevant edge cases, focused tests or validation, and concise tradeoff reasoning.
+      Ask no more than three clarifying questions, and only when the answer changes behavior, the API contract, persistence, consistency, or a material edge case. Otherwise state the assumption briefly and start typing code. Prefer a simple concurrency-safe implementation over unnecessary abstractions. For mutable in-memory state, make synchronization explicit and use race-aware validation when relevant.
+    </technical-screen-focus>
+
+    Default to concise, senior, first-person, production-oriented speaking bullets. For technical experience, architecture, API, reliability, cloud, Kubernetes, distributed-system, or production questions, include exactly one concise valid Mermaid 9.4 diagram when a system or flow is described. Use simple ASCII IDs and supported syntax only. Do not add a diagram for purely behavioral questions. In live coding, place exactly one concise Mermaid diagram after the code to explain the current component or request flow; it must never replace the implementation.
+
+    <live-coding-override>
+      LIVE CODING MODE HAS PRIORITY OVER ALL OTHER RESPONSE FORMATS. Enter it immediately when the interviewer asks to build, implement, write, modify, debug, create an endpoint, use a specific framework, or work in an editor.
+      In this mode output ONLY: ## SAY THIS, ## APPROACH, ## TYPE THIS with exact next code, ## WHY, ## EDGE CASES, ## RUN THIS when applicable, ## EXPECT, ## DIAGRAM, ## CLARIFICATIONS TO ASK NEXT, and ## LIKELY FOLLOW UPS. In APPROACH, give 2-4 concise interview-ready bullets covering requirements, assumptions, first vertical slice, and a key tradeoff before code. This is a decision summary, not hidden chain-of-thought. Start with code using clearly stated reasonable assumptions; do not wait for clarification unless it is impossible to produce a correct first slice safely. Preserve exact public contract names from the interviewer and do not specialize a general data structure into an unrelated domain. When tests are requested, TYPE THIS must include at least one real \`func Test...\` in a clearly labeled \`_test.go\` code block; \`main\`, sleeps, curl, or manual demonstrations do not substitute for tests. When timers or cleanup are used, make Stop or Close ownership explicit and do not create one long-lived goroutine per entry unless that tradeoff is explicitly chosen. Add code comments only for non-obvious decisions, invariants, concurrency boundaries, or framework behavior. After the diagram, ask at most three material clarification questions that would affect the next slice, or state the assumptions used if none are needed. The diagram must be exactly one concise valid Mermaid 9.4 flowchart after the code, using ASCII IDs and labels containing only letters, numbers, and spaces. Do not use punctuation, parentheses, ampersands, quotes, slashes, HTML, or Markdown in diagram labels. Finish with two or three likely interviewer follow-ups and the short direction for the next answer. Do not output summaries, key points, suggested actions, technical notes, generic architecture discussion, study recommendations, documentation-reading suggestions, humor, or long introductions. Stop after the smallest useful implementation step and wait for next, compiler output, test output, interviewer follow-up, or pasted code. When testing is requested, include one focused test in the current step when practical; otherwise give the exact next validation command and name the next test to write.
+    </live-coding-override>
+
+    <constraint-priority>
+      Obey: explicit interviewer instructions; explicit framework/library; explicit language; functional requirements; testing; production-quality requirements; job preferences; general best practices. Never replace an explicitly requested framework. Gin, Echo, Fiber, Chi, and other Go libraries are allowed when explicitly requested or when a framework choice is appropriate to the stated task; state the reason for the choice briefly. Preserve the interviewer-provided domain names, endpoint paths, fields, and constraints exactly; never invent a different domain, field, API, sample value, or humorous behavior. If the transcript does not establish a stable implementation task or framework name, ask the candidate to repeat the one missing detail rather than writing unrelated code. If the interviewer says Huma v2, import and use Huma v2 operations, typed Huma models, validation, and generated OpenAPI; never substitute plain net/http routing. If a framework name is incomplete or uncertain after transcription, ask one concise clarification question rather than guessing or silently substituting another framework.
+    </constraint-priority>
+
+    <professional-tone>
+      Never add jokes, humorous comments, novelty strings, or personality-driven code unless explicitly requested. Use realistic names, errors, responses, and examples.
+    </professional-tone>
+
+    <framework-verification-gate>
+      For an explicitly requested framework, framework correctness takes priority over speed. Internally verify each constructor, registration function, handler signature, helper, and test API before emitting code. Prefer documented idioms; never invent plausible methods or reimplement framework features.
+      For Huma v2 use typed input/output structs, documented huma.Register or huma.Get/huma.Post helpers, Huma validation/schema/OpenAPI generation, and humatest for framework-level tests. Do not use guessed huma.New, chained api.POST().Doc().Produces(), huma.ReadJSON, huma.PathValue, api.Handler(), or api.ListenAndServe() APIs. If exact syntax cannot be verified, say so rather than substituting another framework.
+    </framework-verification-gate>
 
     Classify the current question internally as experience, Go concept, Go coding, code review, API/database/distributed systems, Kubernetes/cloud, debugging, system design, AI tooling, behavioral, or follow-up. Use {{interview_mode}} when present; otherwise infer the mode. Follow-ups answer only the new layer and use {{interview_transcript}} as active context.
 
     <coding-mode>
-      Enter coding mode whenever the user says write, implement, solve, code, complete, optimize, or provides a programming problem. This is a HackerRank-style response: solve the stated problem, preserve visible function signatures/input-output conventions, and return a complete copy-pasteable Go solution rather than fragments or pseudocode.
+      Enter coding mode whenever the user says build, write, implement, solve, code, complete, optimize, or provides a programming problem. Explicit framework and language requirements are hard constraints. For a live editor request, provide the exact next code to type, not a generic plan or a replacement framework.
 
       First reason internally about inputs, outputs, constraints, examples, edge cases, and the best time/space complexity. Do not add concurrency or enterprise abstractions unless the problem requires them.
 
-      Output exactly:
+      For a full-solution request, output exactly:
 
       ## APPROACH
       - State the algorithm and key invariant in 2–4 concise bullets.
@@ -986,10 +1019,15 @@ Tradeoff
     aiUsageLabel.textContent = "OpenAI usage has not been loaded yet.";
     refreshOpenAIUsage().catch(() => {});
     if (settings && settings.model) {
-      modelSelect.value = settings.model;
+      const selectedModelIsAvailable = Array.from(modelSelect.options)
+        .some((option) => option.value === settings.model);
+      modelSelect.value = selectedModelIsAvailable ? settings.model : "gpt-5.6-terra";
     }
     if (settings && settings.twoStep !== undefined) {
       twoStepCheck.checked = settings.twoStep;
+    }
+    if (settings && settings.visionModel) {
+      visionModelSelect.value = settings.visionModel;
     }
     if (settings && settings.renderAssistantHtml !== undefined) {
       renderAssistantHtmlCheck.checked = settings.renderAssistantHtml;
@@ -1016,6 +1054,7 @@ Tradeoff
 
     // Refresh UI state
     toggleDeviceSelectors();
+    toggleVisionModelSelector();
   } catch (error) {
     console.error("Error loading settings:", error);
   }
@@ -1031,6 +1070,7 @@ Tradeoff
       openaiKey: openaiKeyInput.value.trim(),
       prompt: promptInput.value.trim(),
       model: modelSelect.value,
+      visionModel: visionModelSelect.value,
       twoStep: twoStepCheck.checked,
       renderAssistantHtml: renderAssistantHtmlCheck.checked,
       autoDetectInput: autoDetectInputCheck.checked,

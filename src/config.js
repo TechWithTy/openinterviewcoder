@@ -1,11 +1,56 @@
 const Store = require("electron-store");
 
+const AVAILABLE_MODELS = new Set([
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "gpt-5.5-2026-04-23",
+  "gpt-5.4-2026-03-05",
+  "gpt-5.2-2025-12-11",
+  "gpt-5.1-2025-11-13",
+  "gpt-5.1-codex",
+  "gpt-5-codex",
+  "gpt-5-chat-latest",
+  "gpt-5-2025-08-07",
+  "gpt-4.1-2025-04-14",
+  "gpt-4o-2024-05-13",
+  "gpt-4o-2024-08-06",
+  "gpt-4o-2024-11-20",
+  "o3-2025-04-16",
+  "o1-preview-2024-09-12",
+  "o1-2024-12-17",
+  "gpt-5.4-mini-2026-03-17",
+  "gpt-5.4-nano-2026-03-17",
+  "gpt-5.1-codex-mini",
+  "gpt-5-mini-2025-08-07",
+  "gpt-5-nano-2025-08-07",
+  "gpt-4.1-mini-2025-04-14",
+  "gpt-4.1-nano-2025-04-14",
+  "gpt-4o-mini-2024-07-18",
+  "o4-mini-2025-04-16",
+  "o1-mini-2024-09-12",
+  "codex-mini-latest",
+]);
+
+const VISION_MODELS = new Set([
+  "gpt-5.6-sol", "gpt-5.5-2026-04-23", "gpt-5.4-2026-03-05",
+  "gpt-5.2-2025-12-11", "gpt-5.1-2025-11-13", "gpt-5-2025-08-07",
+  "gpt-5-chat-latest", "gpt-4.1-2025-04-14", "gpt-4o-2024-05-13",
+  "gpt-4o-2024-08-06", "gpt-4o-2024-11-20", "o3-2025-04-16",
+  "o1-2024-12-17", "gpt-5.6-terra", "gpt-5.6-luna",
+  "gpt-5.4-mini-2026-03-17", "gpt-5.4-nano-2026-03-17",
+  "gpt-5-mini-2025-08-07", "gpt-5-nano-2025-08-07",
+  "gpt-4.1-mini-2025-04-14", "gpt-4.1-nano-2025-04-14",
+  "gpt-4o-mini-2024-07-18", "o4-mini-2025-04-16",
+]);
+
 const store = new Store({
   defaults: {
     openai: {
       apiKey: "",
       prompt: "Analyze this screenshot and provide insights.",
-      model: "gpt-4o-mini",
+      model: "gpt-5.6-terra",
+      visionModel: "gpt-5.6-luna",
       autoDetectInput: true,
       autoDetectOutput: true,
       renderAssistantHtml: false,
@@ -34,8 +79,18 @@ module.exports = {
   hasOpenAIKey: () => !!store.get("openai.apiKey"),
   getPrompt: () => store.get("openai.prompt") || "Analyze this screenshot and provide insights.",
   setPrompt: (prompt) => store.set("openai.prompt", prompt),
-  getModel: () => store.get("openai.model") || "gpt-4o-mini",
+  getModel: () => {
+    const model = store.get("openai.model");
+    return AVAILABLE_MODELS.has(model) ? model : "gpt-5.6-terra";
+  },
   setModel: (model) => store.set("openai.model", model),
+  getVisionModel: () => {
+    const model = store.get("openai.visionModel");
+    return VISION_MODELS.has(model)
+      ? model
+      : "gpt-5.6-luna";
+  },
+  setVisionModel: (model) => store.set("openai.visionModel", model),
   getTwoStep: () => store.get("openai.twoStep") || false,
   setTwoStep: (twoStep) => store.set("openai.twoStep", twoStep),
   getAutoDetectInput: () => store.get("openai.autoDetectInput") ?? true,

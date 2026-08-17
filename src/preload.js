@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveSettings: (settings) => ipcRenderer.invoke("save-settings", settings),
   uploadInterviewDocument: (kind) => ipcRenderer.invoke("upload-interview-document", kind),
   getOpenAIUsage: () => ipcRenderer.invoke("get-openai-usage"),
+  copyTextToClipboard: (text) => ipcRenderer.invoke("copy-text-to-clipboard", text),
 
   // Show settings window
   showSettings: () => ipcRenderer.invoke("show-settings"),
@@ -72,6 +73,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Chat reset
   onResetChat: (callback) =>
     ipcRenderer.on("reset-chat", (event) => callback()),
+  onCopyLastAIOutput: (callback) =>
+    ipcRenderer.on("copy-last-ai-output", () => callback()),
+  onCopyChatTranscript: (callback) =>
+    ipcRenderer.on("copy-chat-transcript", () => callback()),
 
   // Window position
   onWindowPositionChanged: (callback) =>

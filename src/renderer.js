@@ -403,6 +403,12 @@ function setupEventListeners() {
 
   // Handle chat reset
   electronAPI.onResetChat(resetChat);
+  electronAPI.onCopyLastAIOutput?.(() => {
+    copyTextToClipboard(getLastAIOutput(), "Latest AI response").catch((error) => addErrorMessage(error.message));
+  });
+  electronAPI.onCopyChatTranscript?.(() => {
+    copyTextToClipboard(getChatTranscript(), "Chat transcript").catch((error) => addErrorMessage(error.message));
+  });
 
   // Handle dark mode toggle
   electronAPI.onToggleDarkMode(() => {
@@ -507,7 +513,6 @@ async function startRecording(type, reason) {
 
     if (
       type === "input" &&
-      !settings.autoDetectInput &&
       settings.inputDeviceId &&
       settings.inputDeviceId !== "default"
     ) {
@@ -688,6 +693,43 @@ async function addTranscriptionToChat(source, text) {
   scheduleTranscriptionFlush(source);
 }
 
+function getLastAIOutput() {
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.type === "assistant" && message.status === "completed" && message.content?.trim());
+  if (lastAssistantMessage?.content?.trim()) return lastAssistantMessage.content.trim();
+
+  const renderedOutputs = chatHistory.querySelectorAll(".message.assistant[data-message-id] .message-content");
+  return renderedOutputs.length
+    ? renderedOutputs[renderedOutputs.length - 1].textContent.trim()
+    : "";
+}
+
+function getChatTranscript() {
+  const entries = messages.flatMap((message) => {
+    if (message.type === "user" && message.content?.trim()) return [`User: ${message.content.trim()}`];
+    if (message.type === "assistant" && message.status === "completed" && message.content?.trim()) {
+      return [`AI: ${message.content.trim()}`];
+    }
+    return [];
+  });
+  for (const [source, state] of Object.entries(liveTranscription)) {
+    if (state.text?.trim()) entries.push(`${source} transcript: ${state.text.trim()}`);
+  }
+  if (entries.length) return entries.join("\n\n");
+
+  return [...chatHistory.querySelectorAll(".message")]
+    .map((message) => message.textContent.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+async function copyTextToClipboard(text, label) {
+  const result = await getElectronAPI().copyTextToClipboard(text);
+  if (!result?.success) throw new Error(result?.error || "Unable to copy text.");
+  addAssistantInfoMessage(`${label} copied to clipboard.`);
+}
+
 // Handle keyboard shortcuts
 function handleKeyboardShortcuts(event) {
   if (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA") {
@@ -741,6 +783,15 @@ function updateMessage(data) {
     console.log("Creating new message element");
     messageEl = createMessageElement(messageId);
     chatHistory.appendChild(messageEl);
+    if (!messages.some((message) => message.messageId === messageId)) {
+      messages.push({
+        type: "assistant",
+        timestamp: Date.now(),
+        messageId,
+        content: "",
+        status: "pending",
+      });
+    }
     // Show typing indicator for new messages
     typingIndicator.classList.add("visible");
     console.log("Typing indicator shown");
@@ -1193,6 +1244,7 @@ async function handleTestResponse(prompt) {
       assistantMessageEl.classList.remove("loading");
       scrollToBottom();
     }
+    assistantMessage.content = result.content;
     assistantMessage.status = "completed";
 
     // Hide typing indicator

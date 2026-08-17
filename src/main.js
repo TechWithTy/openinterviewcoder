@@ -12,6 +12,7 @@ const {
   Tray,
   shell,
   dialog,
+  clipboard,
 } = require("electron");
 const fs = require("fs");
 const path = require("path");
@@ -241,6 +242,7 @@ ipcMain.handle("get-settings", () => {
     openaiKey: config.getOpenAIKey(),
     prompt: config.getPrompt(),
     model: config.getModel(),
+    visionModel: config.getVisionModel(),
     twoStep: config.getTwoStep(),
     autoDetectInput: config.getAutoDetectInput(),
     autoDetectOutput: config.getAutoDetectOutput(),
@@ -273,6 +275,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   if (settings.model !== undefined) {
     config.setModel(settings.model);
+  }
+  if (settings.visionModel !== undefined) {
+    config.setVisionModel(settings.visionModel);
   }
   if (settings.twoStep !== undefined) {
     config.setTwoStep(settings.twoStep);
@@ -310,21 +315,42 @@ ipcMain.handle("save-settings", async (event, settings) => {
 });
 
 ipcMain.handle("get-openai-usage", () => getOrganizationUsage());
+ipcMain.handle("copy-text-to-clipboard", (_, text) => {
+  const value = String(text || "").trim();
+  if (!value) return { success: false, error: "There is nothing to copy yet." };
+  clipboard.writeText(value);
+  return { success: true };
+});
 
 ipcMain.handle("upload-interview-document", async (event, kind) => {
   const isResume = kind === "resume";
-  const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const restoreAlwaysOnTop = Boolean(owner && !owner.isDestroyed() && owner.isAlwaysOnTop());
+  logEvent("document", "Opening interview document picker", { kind, hasOwner: Boolean(owner) });
+  if (owner && !owner.isDestroyed()) {
+    owner.focus();
+    // On Windows an always-on-top parent can obscure a native child picker.
+    if (restoreAlwaysOnTop) owner.setAlwaysOnTop(false);
+  }
+  let result;
+  try {
+    result = await dialog.showOpenDialog(owner && !owner.isDestroyed() ? owner : undefined, {
     title: isResume ? "Select résumé" : "Select job description",
     properties: ["openFile"],
     filters: [{ name: "Documents", extensions: ["pdf", "docx"] }],
-  });
+    });
+  } finally {
+    if (owner && !owner.isDestroyed() && restoreAlwaysOnTop) owner.setAlwaysOnTop(true);
+  }
   if (result.canceled) return { success: true, canceled: true };
   try {
     const document = await extractDocument(result.filePaths[0]);
     if (isResume) config.setResumeDocument(document);
     else config.setJobDescriptionDocument(document);
+    logEvent("document", "Interview document uploaded", { kind, name: document.name, type: document.type });
     return { success: true, document: { name: document.name, type: document.type, truncated: document.truncated } };
   } catch (error) {
+    logEvent("document", "Interview document upload failed", { kind, message: error.message });
     return { success: false, error: error.message };
   }
 });
@@ -641,6 +667,7 @@ function registerRecordingHoldShortcut({
 
   const primaryRegistered = globalShortcut.register(primary, triggerHold);
   if (primaryRegistered) {
+    console.log(`[shortcuts] Registered hold shortcut: ${primary}`);
     return;
   }
   if (!fallback) {
@@ -1085,18 +1112,21 @@ function registerShortcuts() {
     token: "shortcut-hold-input",
     targets: ["input"],
     primary: "CommandOrControl+Alt+I",
+    fallback: "Alt+Shift+I",
   });
   registerRecordingHoldShortcut({
     name: "Output",
     token: "shortcut-hold-output",
     targets: ["output"],
     primary: "CommandOrControl+Alt+O",
+    fallback: "Alt+Shift+O",
   });
   registerRecordingHoldShortcut({
     name: "Both",
     token: "shortcut-hold-both",
     targets: ["input", "output"],
     primary: "CommandOrControl+Alt+B",
+    fallback: "Alt+Shift+B",
   });
 
   // Window movement shortcuts
@@ -1164,6 +1194,13 @@ function registerShortcuts() {
     if (invisibleWindow) {
       invisibleWindow.webContents.send("reset-chat");
     }
+  });
+
+  globalShortcut.register("CommandOrControl+Alt+Shift+C", () => {
+    invisibleWindow?.webContents.send("copy-last-ai-output");
+  });
+  globalShortcut.register("CommandOrControl+Alt+Shift+L", () => {
+    invisibleWindow?.webContents.send("copy-chat-transcript");
   });
 
   // Dark mode shortcut. Ctrl/Cmd + Shift + D may be taken by other apps,

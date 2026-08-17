@@ -161,33 +161,42 @@
           <label class="setting-label">AI Model</label>
           <div class="setting-control">
             <select id="modelSelect">
-              <optgroup label="Tier 1 (250k tokens/day)">
-                <option value="gpt-5.2">gpt-5.2</option>
-                <option value="gpt-5.1">gpt-5.1</option>
-                <option value="gpt-5.1-codex">gpt-5.1-codex</option>
-                <option value="gpt-5">gpt-5</option>
-                <option value="gpt-5-codex">gpt-5-codex</option>
-                <option value="gpt-5-chat-latest">gpt-5-chat-latest</option>
-                <option value="gpt-4.1">gpt-4.1</option>
-                <option value="gpt-4o">gpt-4o</option>
-                <option value="o1">o1</option>
-                <option value="o3">o3</option>
+              <optgroup label="1M shared token group (250K on tiers 1–2)">
+                <option value="gpt-5.6-sol">GPT-5.6 Sol — $5.00 input / $30.00 output per 1M</option>
+                <option value="gpt-5.5-2026-04-23">GPT-5.5 (2026-04-23)</option>
+                <option value="gpt-5.4-2026-03-05">GPT-5.4 (2026-03-05)</option>
+                <option value="gpt-5.2-2025-12-11">GPT-5.2 (2025-12-11)</option>
+                <option value="gpt-5.1-2025-11-13">GPT-5.1 (2025-11-13)</option>
+                <option value="gpt-5.1-codex">GPT-5.1 Codex</option>
+                <option value="gpt-5-codex">GPT-5 Codex</option>
+                <option value="gpt-5-2025-08-07">GPT-5 (2025-08-07)</option>
+                <option value="gpt-5-chat-latest">GPT-5 Chat Latest</option>
+                <option value="gpt-4.1-2025-04-14">GPT-4.1 (2025-04-14)</option>
+                <option value="gpt-4o-2024-05-13">GPT-4o (2024-05-13)</option>
+                <option value="gpt-4o-2024-08-06">GPT-4o (2024-08-06)</option>
+                <option value="gpt-4o-2024-11-20">GPT-4o (2024-11-20)</option>
+                <option value="o3-2025-04-16">o3 (2025-04-16)</option>
+                <option value="o1-preview-2024-09-12">o1 Preview (2024-09-12)</option>
+                <option value="o1-2024-12-17">o1 (2024-12-17)</option>
               </optgroup>
-              <optgroup label="Tier 2 (2.5M tokens/day)">
+              <optgroup label="10M shared token group (2.5M on tiers 1–2)">
+                <option value="gpt-5.6-terra">GPT-5.6 Terra — Recommended for coding ($2.50 input / $15.00 output per 1M)</option>
+                <option value="gpt-5.6-luna">GPT-5.6 Luna — $1.00 input / $6.00 output per 1M</option>
+                <option value="gpt-5.4-mini-2026-03-17">GPT-5.4 Mini (2026-03-17)</option>
+                <option value="gpt-5.4-nano-2026-03-17">GPT-5.4 Nano (2026-03-17)</option>
                 <option value="gpt-5.1-codex-mini">gpt-5.1-codex-mini</option>
-                <option value="gpt-5-mini">gpt-5-mini</option>
-                <option value="gpt-5-nano">gpt-5-nano</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-4.1-nano">gpt-4.1-nano</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="o1-mini">o1-mini</option>
-                <option value="o3-mini">o3-mini</option>
-                <option value="o4-mini">o4-mini</option>
+                <option value="gpt-5-mini-2025-08-07">GPT-5 Mini (2025-08-07)</option>
+                <option value="gpt-5-nano-2025-08-07">GPT-5 Nano (2025-08-07)</option>
+                <option value="gpt-4.1-mini-2025-04-14">GPT-4.1 Mini (2025-04-14)</option>
+                <option value="gpt-4.1-nano-2025-04-14">GPT-4.1 Nano (2025-04-14)</option>
+                <option value="gpt-4o-mini-2024-07-18">GPT-4o Mini (2024-07-18)</option>
+                <option value="o4-mini-2025-04-16">o4 Mini (2025-04-16)</option>
+                <option value="o1-mini-2024-09-12">o1 Mini (2024-09-12)</option>
                 <option value="codex-mini-latest">codex-mini-latest</option>
               </optgroup>
             </select>
             <div class="api-key-description">
-              Select the OpenAI model to use for analysis. Make sure your API key has access to the selected model.
+              The two groups share their own token quota. Prices shown are standard text-token rates; cached input is billed separately. Terra is the balanced choice for live Go coding. Your OpenAI project must have access to the selected model.
             </div>
           </div>
         </div>
@@ -196,7 +205,40 @@
           <label class="setting-label">Two-Step Vision Pipeline</label>
           <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
             <input type="checkbox" id="twoStepCheck" style="width: auto;" />
-            <span style="color: #cbd5e1; font-size: 14px;">Use gpt-4o-mini to extract text first, then pass text to target model (Required for o1/o3-mini).</span>
+            <span style="color: #cbd5e1; font-size: 14px;">Extract text and layout from an image with a vision model, then send that text to the selected generation model.</span>
+          </div>
+          <div id="visionModelContainer" class="setting-control" style="margin-top: 10px;">
+            <label class="setting-label" for="visionModelSelect">Vision extraction model</label>
+            <select id="visionModelSelect">
+              <optgroup label="1M shared token group">
+                <option value="gpt-5.6-sol">GPT-5.6 Sol ($5.00 input / $30.00 output per 1M)</option>
+                <option value="gpt-5.5-2026-04-23">GPT-5.5 ($5.00 input / $30.00 output per 1M)</option>
+                <option value="gpt-5.4-2026-03-05">GPT-5.4 ($2.50 input / $15.00 output per 1M)</option>
+                <option value="gpt-5.2-2025-12-11">GPT-5.2 ($1.75 input / $14.00 output per 1M)</option>
+                <option value="gpt-5.1-2025-11-13">GPT-5.1 ($1.25 input / $10.00 output per 1M)</option>
+                <option value="gpt-5-2025-08-07">GPT-5 ($1.25 input / $10.00 output per 1M)</option>
+                <option value="gpt-5-chat-latest">GPT-5 Chat Latest ($1.25 input / $10.00 output per 1M)</option>
+                <option value="gpt-4.1-2025-04-14">GPT-4.1 ($2.00 input / $8.00 output per 1M)</option>
+                <option value="gpt-4o-2024-05-13">GPT-4o ($2.50 input / $10.00 output per 1M)</option>
+                <option value="gpt-4o-2024-08-06">GPT-4o ($2.50 input / $10.00 output per 1M)</option>
+                <option value="gpt-4o-2024-11-20">GPT-4o ($2.50 input / $10.00 output per 1M)</option>
+                <option value="o3-2025-04-16">o3 ($2.00 input / $8.00 output per 1M)</option>
+                <option value="o1-2024-12-17">o1 ($15.00 input / $60.00 output per 1M)</option>
+              </optgroup>
+              <optgroup label="10M shared token group">
+                <option value="gpt-5.6-terra">GPT-5.6 Terra ($2.50 input / $15.00 output per 1M)</option>
+                <option value="gpt-5.6-luna">GPT-5.6 Luna ($1.00 input / $6.00 output per 1M)</option>
+                <option value="gpt-5.4-mini-2026-03-17">GPT-5.4 Mini ($0.75 input / $4.50 output per 1M)</option>
+                <option value="gpt-5.4-nano-2026-03-17">GPT-5.4 Nano ($0.20 input / $1.25 output per 1M)</option>
+                <option value="gpt-5-mini-2025-08-07">GPT-5 Mini ($0.25 input / $2.00 output per 1M)</option>
+                <option value="gpt-5-nano-2025-08-07">GPT-5 Nano ($0.05 input / $0.40 output per 1M)</option>
+                <option value="gpt-4.1-mini-2025-04-14">GPT-4.1 Mini ($0.40 input / $1.60 output per 1M)</option>
+                <option value="gpt-4.1-nano-2025-04-14">GPT-4.1 Nano ($0.10 input / $0.40 output per 1M)</option>
+                <option value="gpt-4o-mini-2024-07-18">GPT-4o Mini ($0.15 input / $0.60 output per 1M)</option>
+                <option value="o4-mini-2025-04-16">o4 Mini ($1.10 input / $4.40 output per 1M)</option>
+              </optgroup>
+            </select>
+            <div class="api-key-description">The extraction model receives the screenshot only. The main AI Model receives extracted text and produces the final answer.</div>
           </div>
         </div>
 
@@ -330,7 +372,7 @@
             </div>
             <div id="resumeDocumentStatus" class="api-key-description">No résumé uploaded.</div>
             <div id="jobDescriptionDocumentStatus" class="api-key-description">No job description uploaded.</div>
-            <div class="api-key-description">These files are used only when the Hiring Manager Interview prompt is selected.</div>
+            <div class="api-key-description">These files are available as factual context for every selected prompt.</div>
           </div>
         </div>
 
