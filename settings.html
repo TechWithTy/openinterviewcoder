@@ -296,6 +296,14 @@
         </div>
 
         <div class="setting-item">
+          <label class="setting-label">Use Previous AI Responses</label>
+          <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="injectPreviousResponsesCheck" style="width: auto;" />
+            <span style="color: #cbd5e1; font-size: 14px;">Include recent completed AI answers as context for follow-up questions in this chat.</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
           <label class="setting-label">Azure Speech Key</label>
           <div class="setting-control">
             <input type="password" id="azureSpeechKey" placeholder="Enter Azure Speech/Whisper key" />

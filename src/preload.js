@@ -61,7 +61,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getRecentScreenshots: () => ipcRenderer.invoke("get-recent-screenshots"),
 
   // Test response
-  testResponse: (prompt) => ipcRenderer.invoke("test-response", prompt),
+  testResponse: (prompt, history) => ipcRenderer.invoke("test-response", prompt, history),
   previewExampleOutput: (payload) =>
     ipcRenderer.invoke("preview-example-output", payload),
   onPreviewExampleOutput: (callback) =>
@@ -126,7 +126,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const transcriptionService = getTranscriptionService();
     return transcriptionService.stopTranscription(type);
   },
-  processTranscription: (text) => ipcRenderer.invoke("process-transcription", text),
+  processTranscription: (text, history) => ipcRenderer.invoke("process-transcription", text, history),
   transcribeAudioChunk: (payload) => ipcRenderer.invoke("transcribe-audio-chunk", payload),
 });
 

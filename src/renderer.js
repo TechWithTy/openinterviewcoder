@@ -222,7 +222,8 @@ async function flushTranscriptionBuffer(source) {
       length: payload.length,
     });
     const result = await getElectronAPI().processTranscription(
-      `Source: ${source}, Text: ${payload}`
+      `Source: ${source}, Text: ${payload}`,
+      getPreviousAssistantResponseHistory()
     );
     if (!result?.success) {
       const message = result?.error || "The interview response could not be generated.";
@@ -711,6 +712,12 @@ function getLastAIOutput() {
   return renderedOutputs.length
     ? renderedOutputs[renderedOutputs.length - 1].textContent.trim()
     : "";
+}
+
+function getPreviousAssistantResponseHistory() {
+  return messages
+    .filter((message) => message.type === "assistant" && message.status === "completed" && message.content?.trim())
+    .map((message) => ({ role: "assistant", content: message.content.trim() }));
 }
 
 function getChatTranscript() {
@@ -1240,7 +1247,7 @@ async function handleTestResponse(prompt) {
     chatHistory.appendChild(assistantMessageEl);
     scrollToBottom();
 
-    const result = await window.electronAPI.testResponse(prompt);
+    const result = await window.electronAPI.testResponse(prompt, getPreviousAssistantResponseHistory());
     if (!result.success) {
       throw new Error(result.error);
     }

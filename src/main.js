@@ -247,6 +247,7 @@ ipcMain.handle("get-settings", () => {
     autoDetectInput: config.getAutoDetectInput(),
     autoDetectOutput: config.getAutoDetectOutput(),
     renderAssistantHtml: config.getRenderAssistantHtml(),
+    injectPreviousResponses: config.getInjectPreviousResponses(),
     transcriptionPauseMs: config.getTranscriptionPauseMs(),
     inputDeviceId: config.getInputDeviceId(),
     outputDeviceId: config.getOutputDeviceId(),
@@ -290,6 +291,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   if (settings.renderAssistantHtml !== undefined) {
     config.setRenderAssistantHtml(settings.renderAssistantHtml);
+  }
+  if (settings.injectPreviousResponses !== undefined) {
+    config.setInjectPreviousResponses(settings.injectPreviousResponses);
   }
   if (settings.transcriptionPauseMs !== undefined) {
     config.setTranscriptionPauseMs(settings.transcriptionPauseMs);

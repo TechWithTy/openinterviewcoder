@@ -454,6 +454,20 @@ Instructions:
 - Do not mention ChatGPT, OpenAI, or AI model internals unless explicitly requested.`;
 }
 
+function buildPreviousResponseContext(history) {
+  const responses = Array.isArray(history)
+    ? history
+      .filter((entry) => entry?.role === "assistant" && typeof entry.content === "string" && entry.content.trim())
+      .slice(-6)
+      .map((entry) => entry.content.trim())
+    : [];
+  if (!responses.length) return "";
+
+  const joined = responses.join("\n\n--- Previous AI response ---\n\n");
+  const bounded = joined.length > 12000 ? joined.slice(-12000) : joined;
+  return `\n\n--- Previous AI Responses: Context Only ---\nUse these only to maintain continuity. The current interviewer request and supplied interview materials have higher authority. Do not repeat prior content unless the new request asks for it.\n\n${bounded}`;
+}
+
 function shouldPrioritizeLeftPane(prompt) {
   const normalized = String(prompt || "").toLowerCase();
   return (
@@ -585,17 +599,17 @@ async function initializeLLMService() {
       }
     });
 
-    ipcMain.handle("test-response", async (event, prompt) => {
+    ipcMain.handle("test-response", async (event, prompt, history) => {
       try {
         validateConfig();
-        return await makeLLMRequest(event, { prompt });
+        return await makeLLMRequest(event, { prompt, history });
       } catch (error) {
         console.error("LLM Test Error:", error);
         return { success: false, error: error.message };
       }
     });
 
-    ipcMain.handle("process-transcription", async (event, text) => {
+    ipcMain.handle("process-transcription", async (event, text, history) => {
       try {
         validateConfig();
         const match = String(text || "").match(/^Source:\s*([^,]+),\s*Text:\s*([\s\S]*)$/i);
@@ -607,7 +621,8 @@ async function initializeLLMService() {
           return { success: true, ignored: true };
         }
         return await makeLLMRequest(event, { 
-          prompt: buildTranscriptionPrompt(source, transcript)
+          prompt: buildTranscriptionPrompt(source, transcript),
+          history,
         });
       } catch (error) {
         console.error("Transcription processing error:", error);
@@ -788,7 +803,10 @@ async function makeLLMRequest(event, data) {
       : prioritizeLeftPane
       ? "\n\nImportant image-handling instruction: prioritize the coding problem shown in the left pane/left half of the screenshot. Ignore the center or right pane unless it is needed to complete missing context."
       : "";
-  const finalPrompt = prompt + focusPrefix + extractedTextContext;
+  const previousResponseContext = config.getInjectPreviousResponses()
+    ? buildPreviousResponseContext(data.history)
+    : "";
+  const finalPrompt = prompt + focusPrefix + extractedTextContext + previousResponseContext;
 
   if (isOModel) {
     messages.push({
@@ -1031,6 +1049,7 @@ module.exports = {
   __test__: {
     buildTaskPrompt,
     buildTranscriptionPrompt,
+    buildPreviousResponseContext,
     DEFAULT_ANALYSIS_PROMPT,
     MERMAID_GUIDANCE,
     SYSTEM_DESIGN_MERMAID_REQUIREMENT,

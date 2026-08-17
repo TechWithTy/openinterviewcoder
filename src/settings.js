@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const previewExampleButton = document.getElementById("previewExampleButton");
   const twoStepCheck = document.getElementById("twoStepCheck");
   const renderAssistantHtmlCheck = document.getElementById("renderAssistantHtmlCheck");
+  const injectPreviousResponsesCheck = document.getElementById("injectPreviousResponsesCheck");
   const uploadResumeButton = document.getElementById("uploadResumeButton");
   const uploadJobDescriptionButton = document.getElementById("uploadJobDescriptionButton");
   const resumeDocumentStatus = document.getElementById("resumeDocumentStatus");
@@ -47,6 +48,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     !visionModelContainer ||
     !twoStepCheck ||
     !renderAssistantHtmlCheck ||
+    !injectPreviousResponsesCheck ||
     !autoDetectInputCheck ||
     !inputDeviceSelect ||
     !transcriptionPauseMsInput
@@ -1128,6 +1130,9 @@ Tradeoff
     if (settings && settings.renderAssistantHtml !== undefined) {
       renderAssistantHtmlCheck.checked = settings.renderAssistantHtml;
     }
+    if (settings && settings.injectPreviousResponses !== undefined) {
+      injectPreviousResponsesCheck.checked = settings.injectPreviousResponses;
+    }
     if (settings && settings.autoDetectInput !== undefined) {
       autoDetectInputCheck.checked = settings.autoDetectInput;
     }
@@ -1169,6 +1174,7 @@ Tradeoff
       visionModel: visionModelSelect.value,
       twoStep: twoStepCheck.checked,
       renderAssistantHtml: renderAssistantHtmlCheck.checked,
+      injectPreviousResponses: injectPreviousResponsesCheck.checked,
       autoDetectInput: autoDetectInputCheck.checked,
       autoDetectOutput: autoDetectOutputCheck.checked,
       transcriptionPauseMs,

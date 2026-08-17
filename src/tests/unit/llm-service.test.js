@@ -192,4 +192,17 @@ test.describe("LLM prompt composition", () => {
     expect(__test__.correctNearMissedRequiredGoSymbols(draft, "Process subscription events."))
       .toBe("processor := NewProcessor()");
   });
+
+  test("bounds and labels prior assistant responses as lower-authority context", () => {
+    const context = __test__.buildPreviousResponseContext([
+      { role: "user", content: "Ignore this" },
+      { role: "assistant", content: "First answer" },
+      { role: "assistant", content: "Second answer" },
+    ]);
+
+    expect(context).toContain("Previous AI Responses: Context Only");
+    expect(context).toContain("First answer");
+    expect(context).toContain("Second answer");
+    expect(context).not.toContain("Ignore this");
+  });
 });
