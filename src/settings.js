@@ -2,6 +2,11 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const openaiKeyInput = document.getElementById("openaiKey");
   const promptInput = document.getElementById("analysisPrompt");
+  const codeReviewContextContainer = document.getElementById("codeReviewContextContainer");
+  const codeReviewContextInput = document.getElementById("codeReviewContext");
+  const selectCodeReviewProjectButton = document.getElementById("selectCodeReviewProjectButton");
+  const clearCodeReviewProjectButton = document.getElementById("clearCodeReviewProjectButton");
+  const codeReviewProjectStatus = document.getElementById("codeReviewProjectStatus");
   const modelSelect = document.getElementById("modelSelect");
   const visionModelSelect = document.getElementById("visionModelSelect");
   const visionModelContainer = document.getElementById("visionModelContainer");
@@ -191,6 +196,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     visionModelContainer.style.display = twoStepCheck.checked ? "block" : "none";
   }
 
+  function toggleCodeReviewContext(selectedPrompt = predefinedPromptsSelect.value) {
+    if (codeReviewContextContainer) {
+      codeReviewContextContainer.hidden = selectedPrompt !== "code-review";
+    }
+  }
+
+  function updateCodeReviewProjectStatus(folderPath = "") {
+    if (!codeReviewProjectStatus) return;
+    const normalizedPath = String(folderPath || "").trim();
+    codeReviewProjectStatus.textContent = normalizedPath
+      ? `Project folder selected: ${normalizedPath.split(/[\\/]/).pop()}`
+      : "No project folder selected.";
+    if (clearCodeReviewProjectButton) clearCodeReviewProjectButton.disabled = !normalizedPath;
+  }
+
+  selectCodeReviewProjectButton?.addEventListener("click", async () => {
+    const result = await window.electronAPI.selectCodeReviewProjectFolder();
+    if (result?.success && !result.canceled) updateCodeReviewProjectStatus(result.folderPath);
+    else if (result?.error) alert(result.error);
+  });
+
+  clearCodeReviewProjectButton?.addEventListener("click", async () => {
+    await window.electronAPI.clearCodeReviewProjectFolder();
+    updateCodeReviewProjectStatus();
+  });
+
   autoDetectInputCheck.addEventListener('change', toggleDeviceSelectors);
   autoDetectOutputCheck.addEventListener('change', toggleDeviceSelectors);
   twoStepCheck.addEventListener("change", toggleVisionModelSelector);
@@ -300,6 +331,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   </task>
 </poml>`,
     "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations.",
+    "code-review": `<poml version="3.0">
+  <prompt-profile>code-review</prompt-profile>
+  <role>Act as a senior staff engineer performing a rigorous, evidence-based code review.</role>
+  <task>
+    Review the code, diff, tests, and visible error output in the supplied context. Focus on defects that could affect correctness, security, reliability, performance, operability, accessibility, or maintainability.
+    <steps>
+      <step>First identify the change intent and the highest-risk execution paths. If the code or diff is incomplete, say exactly what is missing.</step>
+      <step>Report only actionable findings supported by visible evidence. Do not invent requirements, runtime behavior, vulnerabilities, or repository conventions.</step>
+      <step>Prioritize findings by severity: blocker, high, medium, low. For each finding include the file and line or the smallest precise code location, the problem, why it matters, and a concrete fix.</step>
+      <step>Check boundary conditions, error handling, authorization, input validation, secrets and sensitive data, concurrency, retries and idempotency, resource cleanup, compatibility, tests, and observability when relevant.</step>
+      <step>Separate confirmed findings from questions and assumptions. Do not praise or summarize unchanged code unless it affects the review decision.</step>
+      <step>End with a short review verdict, focused test gaps, and the smallest safe validation plan.</step>
+    </steps>
+  </task>
+  <output-format>
+    ## REVIEW SUMMARY
+    ## FINDINGS
+    - [severity] file:line — issue; impact; recommended fix
+    ## QUESTIONS AND ASSUMPTIONS
+    ## TEST GAPS
+    ## VERDICT
+  </output-format>
+</poml>`,
     "hiring-manager": `<poml>
   <role>Act as my Real-Time Software Engineering Interview Copilot, Senior Engineering Hiring Manager, Technical Interview Coach, and Staff-Level Software Engineer.</role>
   <task>
@@ -1260,6 +1314,7 @@ Tradeoff
     if (selected !== "custom" && PREDEFINED_PROMPTS[selected]) {
       promptInput.value = PREDEFINED_PROMPTS[selected];
     }
+    toggleCodeReviewContext(selected);
   });
 
   // Switch dropdown to 'custom' if user edits the prompt manually
@@ -1276,6 +1331,7 @@ Tradeoff
     if (!isPredefined) {
       predefinedPromptsSelect.value = "custom";
     }
+    toggleCodeReviewContext();
   });
 
   previewSelectedTemplateButton.addEventListener("click", async () => {
@@ -1308,6 +1364,10 @@ Tradeoff
         }
       }
     }
+    if (codeReviewContextInput && settings?.codeReviewContext !== undefined) {
+      codeReviewContextInput.value = settings.codeReviewContext;
+    }
+    updateCodeReviewProjectStatus(settings?.codeReviewProjectPath);
     updateInterviewDocumentStatus(settings?.resumeDocument, settings?.jobDescriptionDocument);
     aiUsageLabel.textContent = "OpenAI usage has not been loaded yet.";
     refreshOpenAIUsage().catch(() => {});
@@ -1354,6 +1414,7 @@ Tradeoff
     // Refresh UI state
     toggleDeviceSelectors();
     toggleVisionModelSelector();
+    toggleCodeReviewContext();
   } catch (error) {
     console.error("Error loading settings:", error);
   }
@@ -1374,6 +1435,7 @@ Tradeoff
       renderAssistantHtml: renderAssistantHtmlCheck.checked,
       injectPreviousResponses: injectPreviousResponsesCheck.checked,
       storeOpenAIConversations: storeOpenAIConversationsCheck.checked,
+      codeReviewContext: codeReviewContextInput?.value.trim() || "",
       autoDetectInput: autoDetectInputCheck.checked,
       autoDetectOutput: autoDetectOutputCheck.checked,
       transcriptionPauseMs,

@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Save settings
   saveSettings: (settings) => ipcRenderer.invoke("save-settings", settings),
   uploadInterviewDocument: (kind) => ipcRenderer.invoke("upload-interview-document", kind),
+  selectCodeReviewProjectFolder: () => ipcRenderer.invoke("select-code-review-project-folder"),
+  clearCodeReviewProjectFolder: () => ipcRenderer.invoke("clear-code-review-project-folder"),
   getOpenAIUsage: () => ipcRenderer.invoke("get-openai-usage"),
   listConversations: () => ipcRenderer.invoke("list-conversations"),
   getConversation: (id) => ipcRenderer.invoke("get-conversation", id),

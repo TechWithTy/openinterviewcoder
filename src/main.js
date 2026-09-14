@@ -161,7 +161,30 @@ graph TD
     </steps>
   </task>
 </poml>`,
-  "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations."
+  "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations.",
+  "code-review": `<poml version="3.0">
+  <prompt-profile>code-review</prompt-profile>
+  <role>Act as a senior staff engineer performing a rigorous, evidence-based code review.</role>
+  <task>
+    Review the code, diff, tests, and visible error output in the supplied context. Focus on defects that could affect correctness, security, reliability, performance, operability, accessibility, or maintainability.
+    <steps>
+      <step>First identify the change intent and the highest-risk execution paths. If the code or diff is incomplete, say exactly what is missing.</step>
+      <step>Report only actionable findings supported by visible evidence. Do not invent requirements, runtime behavior, vulnerabilities, or repository conventions.</step>
+      <step>Prioritize findings by severity: blocker, high, medium, low. For each finding include the file and line or the smallest precise code location, the problem, why it matters, and a concrete fix.</step>
+      <step>Check boundary conditions, error handling, authorization, input validation, secrets and sensitive data, concurrency, retries and idempotency, resource cleanup, compatibility, tests, and observability when relevant.</step>
+      <step>Separate confirmed findings from questions and assumptions. Do not praise or summarize unchanged code unless it affects the review decision.</step>
+      <step>End with a short review verdict, focused test gaps, and the smallest safe validation plan.</step>
+    </steps>
+  </task>
+  <output-format>
+    ## REVIEW SUMMARY
+    ## FINDINGS
+    - [severity] file:line — issue; impact; recommended fix
+    ## QUESTIONS AND ASSUMPTIONS
+    ## TEST GAPS
+    ## VERDICT
+  </output-format>
+</poml>`
 };
 
 const hasDarkModeFlag = process.argv.includes("--dark-mode");
@@ -254,6 +277,8 @@ ipcMain.handle("get-settings", () => {
     renderAssistantHtml: config.getRenderAssistantHtml(),
     injectPreviousResponses: config.getInjectPreviousResponses(),
     storeOpenAIConversations: config.getStoreOpenAIConversations(),
+    codeReviewContext: config.getCodeReviewContext(),
+    codeReviewProjectPath: config.getCodeReviewProjectPath(),
     transcriptionPauseMs: config.getTranscriptionPauseMs(),
     inputDeviceId: config.getInputDeviceId(),
     outputDeviceId: config.getOutputDeviceId(),
@@ -303,6 +328,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   if (settings.storeOpenAIConversations !== undefined) {
     config.setStoreOpenAIConversations(settings.storeOpenAIConversations);
+  }
+  if (settings.codeReviewContext !== undefined) {
+    config.setCodeReviewContext(settings.codeReviewContext);
   }
   if (settings.transcriptionPauseMs !== undefined) {
     config.setTranscriptionPauseMs(settings.transcriptionPauseMs);
@@ -377,6 +405,42 @@ ipcMain.handle("upload-interview-document", async (event, kind) => {
     logEvent("document", "Interview document upload failed", { kind, message: error.message });
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle("select-code-review-project-folder", async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const restoreAlwaysOnTop = Boolean(owner && !owner.isDestroyed() && owner.isAlwaysOnTop());
+  if (owner && !owner.isDestroyed()) {
+    owner.focus();
+    if (restoreAlwaysOnTop) owner.setAlwaysOnTop(false);
+  }
+  let result;
+  try {
+    result = await dialog.showOpenDialog(owner && !owner.isDestroyed() ? owner : undefined, {
+      title: "Select project folder for code review",
+      properties: ["openDirectory"],
+    });
+  } finally {
+    if (owner && !owner.isDestroyed() && restoreAlwaysOnTop) owner.setAlwaysOnTop(true);
+  }
+  if (result.canceled || !result.filePaths[0]) return { success: true, canceled: true };
+
+  const folderPath = result.filePaths[0];
+  try {
+    if (!fs.statSync(folderPath).isDirectory()) {
+      return { success: false, error: "The selected path is not a folder." };
+    }
+    config.setCodeReviewProjectPath(folderPath);
+    logEvent("code-review", "Project folder selected", { folderName: path.basename(folderPath) });
+    return { success: true, folderPath, folderName: path.basename(folderPath) };
+  } catch (error) {
+    return { success: false, error: `Unable to use the selected project folder: ${error.message}` };
+  }
+});
+
+ipcMain.handle("clear-code-review-project-folder", () => {
+  config.setCodeReviewProjectPath("");
+  return true;
 });
 
 ipcMain.handle("preview-example-output", (event, payload) => {
