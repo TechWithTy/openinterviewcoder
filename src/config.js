@@ -56,6 +56,8 @@ const store = new Store({
       renderAssistantHtml: false,
       injectPreviousResponses: false,
       storeOpenAIConversations: false,
+      codeReviewContext: "",
+      codeReviewProjectPath: "",
       transcriptionPauseMs: 2500,
       inputDeviceId: "default",
       outputDeviceId: "default",
@@ -105,6 +107,10 @@ module.exports = {
   setInjectPreviousResponses: (val) => store.set("openai.injectPreviousResponses", Boolean(val)),
   getStoreOpenAIConversations: () => store.get("openai.storeOpenAIConversations") ?? false,
   setStoreOpenAIConversations: (val) => store.set("openai.storeOpenAIConversations", Boolean(val)),
+  getCodeReviewContext: () => store.get("openai.codeReviewContext") || "",
+  setCodeReviewContext: (context) => store.set("openai.codeReviewContext", String(context || "").trim().slice(0, 60000)),
+  getCodeReviewProjectPath: () => store.get("openai.codeReviewProjectPath") || "",
+  setCodeReviewProjectPath: (folderPath) => store.set("openai.codeReviewProjectPath", String(folderPath || "").trim()),
   getTranscriptionPauseMs: () => {
     const value = Number(store.get("openai.transcriptionPauseMs"));
     if (!Number.isFinite(value)) return 2500;

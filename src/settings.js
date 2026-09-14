@@ -2,6 +2,11 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const openaiKeyInput = document.getElementById("openaiKey");
   const promptInput = document.getElementById("analysisPrompt");
+  const codeReviewContextContainer = document.getElementById("codeReviewContextContainer");
+  const codeReviewContextInput = document.getElementById("codeReviewContext");
+  const selectCodeReviewProjectButton = document.getElementById("selectCodeReviewProjectButton");
+  const clearCodeReviewProjectButton = document.getElementById("clearCodeReviewProjectButton");
+  const codeReviewProjectStatus = document.getElementById("codeReviewProjectStatus");
   const modelSelect = document.getElementById("modelSelect");
   const visionModelSelect = document.getElementById("visionModelSelect");
   const visionModelContainer = document.getElementById("visionModelContainer");
@@ -191,6 +196,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     visionModelContainer.style.display = twoStepCheck.checked ? "block" : "none";
   }
 
+  function toggleCodeReviewContext(selectedPrompt = predefinedPromptsSelect.value) {
+    if (codeReviewContextContainer) {
+      codeReviewContextContainer.hidden = selectedPrompt !== "take-home-review";
+    }
+  }
+
+  function updateCodeReviewProjectStatus(folderPath = "") {
+    if (!codeReviewProjectStatus) return;
+    const normalizedPath = String(folderPath || "").trim();
+    codeReviewProjectStatus.textContent = normalizedPath
+      ? `Project folder selected: ${normalizedPath.split(/[\\/]/).pop()}`
+      : "No project folder selected.";
+    if (clearCodeReviewProjectButton) clearCodeReviewProjectButton.disabled = !normalizedPath;
+  }
+
+  selectCodeReviewProjectButton?.addEventListener("click", async () => {
+    const result = await window.electronAPI.selectCodeReviewProjectFolder();
+    if (result?.success && !result.canceled) updateCodeReviewProjectStatus(result.folderPath);
+    else if (result?.error) alert(result.error);
+  });
+
+  clearCodeReviewProjectButton?.addEventListener("click", async () => {
+    await window.electronAPI.clearCodeReviewProjectFolder();
+    updateCodeReviewProjectStatus();
+  });
+
   autoDetectInputCheck.addEventListener('change', toggleDeviceSelectors);
   autoDetectOutputCheck.addEventListener('change', toggleDeviceSelectors);
   twoStepCheck.addEventListener("change", toggleVisionModelSelector);
@@ -300,6 +331,28 @@ document.addEventListener("DOMContentLoaded", async () => {
   </task>
 </poml>`,
     "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations.",
+    "take-home-review": `<poml version="3.0">
+  <prompt-profile>take-home-review</prompt-profile>
+  <role>Act as my real-time technical interview copilot for a senior take-home review with OpenHands / All Hands AI.</role>
+  <task>
+    Use the supplied take-home brief as architecture and response context. Help me explain decisions, defend time-boxed tradeoffs, identify weaknesses before the interviewer does, and distinguish what is visible in the implementation from what I would change in production. Prioritize engineering reasoning over memorized answers.
+    <steps>
+      <step>For every screenshot, identify only what is visibly supported: likely file or module, language, responsibility, inputs, outputs, dependencies, mutation points, async boundaries, and permission boundaries. Clearly separate “I can see”, “This likely”, and “I would inspect X to confirm”. Never hallucinate off-screen code or behavior.</step>
+      <step>Explain how the visible code fits into the architecture: frontend, API, canonical domain, deterministic CPU, MCP capability boundary, agent runtime, QA, or infrastructure. Reinforce that the model proposes actions while the backend enforces state, legality, permissions, and transitions.</step>
+      <step>Review correctness, concurrency, reliability, agent safety, MCP boundaries, validation, error handling, timeouts, retries, idempotency, observability, testing, secret exposure, hidden synchronous I/O, provider coupling, and scale bottlenecks when relevant.</step>
+      <step>When challenged, acknowledge the concern, explain the original time-box or requirement, state the tradeoff, identify when it stops being valid, and describe the production evolution. Do not reflexively agree that a take-home tradeoff was wrong.</step>
+      <step>When a bug is visible, reason in this order: expected behavior, actual behavior, owning layer, smallest reproduction, relevant evidence, root-cause hypothesis, smallest safe fix, and regression test. Do not recommend broad refactors without evidence.</step>
+      <step>Keep responses concise and senior-level. Give a direct answer first, then the strongest evidence, tradeoff, production improvement, and likely follow-up. Never claim the submitted code does something that is not visible or supported.</step>
+    </steps>
+  </task>
+  <output-format>
+    ## SAY THIS
+    ## ARCHITECTURE CONNECTION
+    ## EVIDENCE AND TRADEOFF
+    ## PRODUCTION EVOLUTION
+    ## IF THEY PUSH FURTHER
+  </output-format>
+</poml>`,
     "hiring-manager": `<poml>
   <role>Act as my Real-Time Software Engineering Interview Copilot, Senior Engineering Hiring Manager, Technical Interview Coach, and Staff-Level Software Engineer.</role>
   <task>
@@ -1260,6 +1313,7 @@ Tradeoff
     if (selected !== "custom" && PREDEFINED_PROMPTS[selected]) {
       promptInput.value = PREDEFINED_PROMPTS[selected];
     }
+    toggleCodeReviewContext(selected);
   });
 
   // Switch dropdown to 'custom' if user edits the prompt manually
@@ -1276,6 +1330,7 @@ Tradeoff
     if (!isPredefined) {
       predefinedPromptsSelect.value = "custom";
     }
+    toggleCodeReviewContext();
   });
 
   previewSelectedTemplateButton.addEventListener("click", async () => {
@@ -1301,13 +1356,23 @@ Tradeoff
     }
     if (settings && settings.prompt) {
       promptInput.value = settings.prompt;
+      let matchedPredefinedPrompt = false;
       for (const [key, value] of Object.entries(PREDEFINED_PROMPTS)) {
         if (settings.prompt === value) {
           predefinedPromptsSelect.value = key;
+          matchedPredefinedPrompt = true;
           break;
         }
       }
+      if (!matchedPredefinedPrompt && /<prompt-profile>\s*code-review\s*<\/prompt-profile>/i.test(settings.prompt)) {
+        predefinedPromptsSelect.value = "take-home-review";
+        promptInput.value = PREDEFINED_PROMPTS["take-home-review"];
+      }
     }
+    if (codeReviewContextInput && settings?.codeReviewContext !== undefined) {
+      codeReviewContextInput.value = settings.codeReviewContext;
+    }
+    updateCodeReviewProjectStatus(settings?.codeReviewProjectPath);
     updateInterviewDocumentStatus(settings?.resumeDocument, settings?.jobDescriptionDocument);
     aiUsageLabel.textContent = "OpenAI usage has not been loaded yet.";
     refreshOpenAIUsage().catch(() => {});
@@ -1354,6 +1419,7 @@ Tradeoff
     // Refresh UI state
     toggleDeviceSelectors();
     toggleVisionModelSelector();
+    toggleCodeReviewContext();
   } catch (error) {
     console.error("Error loading settings:", error);
   }
@@ -1374,6 +1440,7 @@ Tradeoff
       renderAssistantHtml: renderAssistantHtmlCheck.checked,
       injectPreviousResponses: injectPreviousResponsesCheck.checked,
       storeOpenAIConversations: storeOpenAIConversationsCheck.checked,
+      codeReviewContext: codeReviewContextInput?.value.trim() || "",
       autoDetectInput: autoDetectInputCheck.checked,
       autoDetectOutput: autoDetectOutputCheck.checked,
       transcriptionPauseMs,

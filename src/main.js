@@ -161,7 +161,29 @@ graph TD
     </steps>
   </task>
 </poml>`,
-  "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations."
+  "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations.",
+  "take-home-review": `<poml version="3.0">
+  <prompt-profile>take-home-review</prompt-profile>
+  <role>Act as my real-time technical interview copilot for a senior take-home review with OpenHands / All Hands AI.</role>
+  <task>
+    Use the supplied take-home brief as architecture and response context. Help me explain decisions, defend time-boxed tradeoffs, identify weaknesses before the interviewer does, and distinguish what is visible in the implementation from what I would change in production. Prioritize engineering reasoning over memorized answers.
+    <steps>
+      <step>For every screenshot, identify only what is visibly supported: likely file or module, language, responsibility, inputs, outputs, dependencies, mutation points, async boundaries, and permission boundaries. Clearly separate “I can see”, “This likely”, and “I would inspect X to confirm”. Never hallucinate off-screen code or behavior.</step>
+      <step>Explain how the visible code fits into the architecture: frontend, API, canonical domain, deterministic CPU, MCP capability boundary, agent runtime, QA, or infrastructure. Reinforce that the model proposes actions while the backend enforces state, legality, permissions, and transitions.</step>
+      <step>Review correctness, concurrency, reliability, agent safety, MCP boundaries, validation, error handling, timeouts, retries, idempotency, observability, testing, secret exposure, hidden synchronous I/O, provider coupling, and scale bottlenecks when relevant.</step>
+      <step>When challenged, acknowledge the concern, explain the original time-box or requirement, state the tradeoff, identify when it stops being valid, and describe the production evolution. Do not reflexively agree that a take-home tradeoff was wrong.</step>
+      <step>When a bug is visible, reason in this order: expected behavior, actual behavior, owning layer, smallest reproduction, relevant evidence, root-cause hypothesis, smallest safe fix, and regression test. Do not recommend broad refactors without evidence.</step>
+      <step>Keep responses concise and senior-level. Give a direct answer first, then the strongest evidence, tradeoff, production improvement, and likely follow-up. Never claim the submitted code does something that is not visible or supported.</step>
+    </steps>
+  </task>
+  <output-format>
+    ## SAY THIS
+    ## ARCHITECTURE CONNECTION
+    ## EVIDENCE AND TRADEOFF
+    ## PRODUCTION EVOLUTION
+    ## IF THEY PUSH FURTHER
+  </output-format>
+</poml>`
 };
 
 const hasDarkModeFlag = process.argv.includes("--dark-mode");
@@ -254,6 +276,8 @@ ipcMain.handle("get-settings", () => {
     renderAssistantHtml: config.getRenderAssistantHtml(),
     injectPreviousResponses: config.getInjectPreviousResponses(),
     storeOpenAIConversations: config.getStoreOpenAIConversations(),
+    codeReviewContext: config.getCodeReviewContext(),
+    codeReviewProjectPath: config.getCodeReviewProjectPath(),
     transcriptionPauseMs: config.getTranscriptionPauseMs(),
     inputDeviceId: config.getInputDeviceId(),
     outputDeviceId: config.getOutputDeviceId(),
@@ -303,6 +327,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   if (settings.storeOpenAIConversations !== undefined) {
     config.setStoreOpenAIConversations(settings.storeOpenAIConversations);
+  }
+  if (settings.codeReviewContext !== undefined) {
+    config.setCodeReviewContext(settings.codeReviewContext);
   }
   if (settings.transcriptionPauseMs !== undefined) {
     config.setTranscriptionPauseMs(settings.transcriptionPauseMs);
@@ -377,6 +404,42 @@ ipcMain.handle("upload-interview-document", async (event, kind) => {
     logEvent("document", "Interview document upload failed", { kind, message: error.message });
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle("select-code-review-project-folder", async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const restoreAlwaysOnTop = Boolean(owner && !owner.isDestroyed() && owner.isAlwaysOnTop());
+  if (owner && !owner.isDestroyed()) {
+    owner.focus();
+    if (restoreAlwaysOnTop) owner.setAlwaysOnTop(false);
+  }
+  let result;
+  try {
+    result = await dialog.showOpenDialog(owner && !owner.isDestroyed() ? owner : undefined, {
+      title: "Select project folder for code review",
+      properties: ["openDirectory"],
+    });
+  } finally {
+    if (owner && !owner.isDestroyed() && restoreAlwaysOnTop) owner.setAlwaysOnTop(true);
+  }
+  if (result.canceled || !result.filePaths[0]) return { success: true, canceled: true };
+
+  const folderPath = result.filePaths[0];
+  try {
+    if (!fs.statSync(folderPath).isDirectory()) {
+      return { success: false, error: "The selected path is not a folder." };
+    }
+    config.setCodeReviewProjectPath(folderPath);
+    logEvent("code-review", "Project folder selected", { folderName: path.basename(folderPath) });
+    return { success: true, folderPath, folderName: path.basename(folderPath) };
+  } catch (error) {
+    return { success: false, error: `Unable to use the selected project folder: ${error.message}` };
+  }
+});
+
+ipcMain.handle("clear-code-review-project-folder", () => {
+  config.setCodeReviewProjectPath("");
+  return true;
 });
 
 ipcMain.handle("preview-example-output", (event, payload) => {

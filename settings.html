@@ -228,6 +228,13 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      #codeReviewContextContainer[hidden] {
+        display: none;
+      }
+      #codeReviewContext {
+        min-height: 110px;
+        resize: vertical;
+      }
     </style>
   </head>
   <body>
@@ -438,6 +445,7 @@
               <option value="hackerrank-frontend-v3">HackerRank: Frontend Coding Interview v3</option>
               <option value="hackerrank-frontend-v4">HackerRank: Frontend Coding Interview v4</option>
               <option value="debug">Code Review: Finding Bugs</option>
+              <option value="take-home-review">Take-Home Review</option>
               <option value="hiring-manager">Hiring Manager Interview</option>
               <option value="panel-interview">Executive + Technical Panel Interview</option>
               <option value="trellis-python-panel">Trellis Panel Interview (Python/Full Stack/AWS)</option>
@@ -481,6 +489,26 @@
             <div class="preview-actions-description">
               Choose a debug or Mermaid example to preview it in the main overlay using the real chat renderer.
             </div>
+          </div>
+        </div>
+
+        <div class="setting-item" id="codeReviewContextContainer" hidden>
+          <label class="setting-label" for="codeReviewContext">Take-home review context (optional)</label>
+          <div class="setting-control">
+            <textarea
+              id="codeReviewContext"
+              maxlength="60000"
+              placeholder="Paste the project architecture, assignment, tech stack, tradeoffs, expected questions, and screenshot instructions here."
+              rows="12"
+            ></textarea>
+            <div class="api-key-description">
+              This context is added only when Take-Home Review is selected. Long architecture briefs are supported; do not include secrets.
+            </div>
+            <div class="template-preview-actions" style="margin-top: 10px;">
+              <button type="button" id="selectCodeReviewProjectButton" class="preview-button">Select project folder</button>
+              <button type="button" id="clearCodeReviewProjectButton" class="preview-button" disabled>Clear folder</button>
+            </div>
+            <div id="codeReviewProjectStatus" class="api-key-description">No project folder selected.</div>
           </div>
         </div>
 
