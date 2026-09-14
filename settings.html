@@ -445,7 +445,7 @@
               <option value="hackerrank-frontend-v3">HackerRank: Frontend Coding Interview v3</option>
               <option value="hackerrank-frontend-v4">HackerRank: Frontend Coding Interview v4</option>
               <option value="debug">Code Review: Finding Bugs</option>
-              <option value="code-review">Code Review: Staff Engineer</option>
+              <option value="take-home-review">Take-Home Review</option>
               <option value="hiring-manager">Hiring Manager Interview</option>
               <option value="panel-interview">Executive + Technical Panel Interview</option>
               <option value="trellis-python-panel">Trellis Panel Interview (Python/Full Stack/AWS)</option>
@@ -493,16 +493,16 @@
         </div>
 
         <div class="setting-item" id="codeReviewContextContainer" hidden>
-          <label class="setting-label" for="codeReviewContext">Code review context (optional)</label>
+          <label class="setting-label" for="codeReviewContext">Take-home review context (optional)</label>
           <div class="setting-control">
             <textarea
               id="codeReviewContext"
-              maxlength="12000"
-              placeholder="Describe the PR goal, language/framework, changed files, compatibility constraints, known failures, or review priorities."
-              rows="5"
+              maxlength="60000"
+              placeholder="Paste the project architecture, assignment, tech stack, tradeoffs, expected questions, and screenshot instructions here."
+              rows="12"
             ></textarea>
             <div class="api-key-description">
-              This context is added only when the Staff Engineer code-review template is selected. Do not include secrets.
+              This context is added only when Take-Home Review is selected. Long architecture briefs are supported; do not include secrets.
             </div>
             <div class="template-preview-actions" style="margin-top: 10px;">
               <button type="button" id="selectCodeReviewProjectButton" class="preview-button">Select project folder</button>

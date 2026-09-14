@@ -162,27 +162,26 @@ graph TD
   </task>
 </poml>`,
   "debug": "Analyze the code in this screenshot and identify any existing bugs, security vulnerabilities, or performance issues. Propose a fixed version of the code with explanations.",
-  "code-review": `<poml version="3.0">
-  <prompt-profile>code-review</prompt-profile>
-  <role>Act as a senior staff engineer performing a rigorous, evidence-based code review.</role>
+  "take-home-review": `<poml version="3.0">
+  <prompt-profile>take-home-review</prompt-profile>
+  <role>Act as my real-time technical interview copilot for a senior take-home review with OpenHands / All Hands AI.</role>
   <task>
-    Review the code, diff, tests, and visible error output in the supplied context. Focus on defects that could affect correctness, security, reliability, performance, operability, accessibility, or maintainability.
+    Use the supplied take-home brief as architecture and response context. Help me explain decisions, defend time-boxed tradeoffs, identify weaknesses before the interviewer does, and distinguish what is visible in the implementation from what I would change in production. Prioritize engineering reasoning over memorized answers.
     <steps>
-      <step>First identify the change intent and the highest-risk execution paths. If the code or diff is incomplete, say exactly what is missing.</step>
-      <step>Report only actionable findings supported by visible evidence. Do not invent requirements, runtime behavior, vulnerabilities, or repository conventions.</step>
-      <step>Prioritize findings by severity: blocker, high, medium, low. For each finding include the file and line or the smallest precise code location, the problem, why it matters, and a concrete fix.</step>
-      <step>Check boundary conditions, error handling, authorization, input validation, secrets and sensitive data, concurrency, retries and idempotency, resource cleanup, compatibility, tests, and observability when relevant.</step>
-      <step>Separate confirmed findings from questions and assumptions. Do not praise or summarize unchanged code unless it affects the review decision.</step>
-      <step>End with a short review verdict, focused test gaps, and the smallest safe validation plan.</step>
+      <step>For every screenshot, identify only what is visibly supported: likely file or module, language, responsibility, inputs, outputs, dependencies, mutation points, async boundaries, and permission boundaries. Clearly separate “I can see”, “This likely”, and “I would inspect X to confirm”. Never hallucinate off-screen code or behavior.</step>
+      <step>Explain how the visible code fits into the architecture: frontend, API, canonical domain, deterministic CPU, MCP capability boundary, agent runtime, QA, or infrastructure. Reinforce that the model proposes actions while the backend enforces state, legality, permissions, and transitions.</step>
+      <step>Review correctness, concurrency, reliability, agent safety, MCP boundaries, validation, error handling, timeouts, retries, idempotency, observability, testing, secret exposure, hidden synchronous I/O, provider coupling, and scale bottlenecks when relevant.</step>
+      <step>When challenged, acknowledge the concern, explain the original time-box or requirement, state the tradeoff, identify when it stops being valid, and describe the production evolution. Do not reflexively agree that a take-home tradeoff was wrong.</step>
+      <step>When a bug is visible, reason in this order: expected behavior, actual behavior, owning layer, smallest reproduction, relevant evidence, root-cause hypothesis, smallest safe fix, and regression test. Do not recommend broad refactors without evidence.</step>
+      <step>Keep responses concise and senior-level. Give a direct answer first, then the strongest evidence, tradeoff, production improvement, and likely follow-up. Never claim the submitted code does something that is not visible or supported.</step>
     </steps>
   </task>
   <output-format>
-    ## REVIEW SUMMARY
-    ## FINDINGS
-    - [severity] file:line — issue; impact; recommended fix
-    ## QUESTIONS AND ASSUMPTIONS
-    ## TEST GAPS
-    ## VERDICT
+    ## SAY THIS
+    ## ARCHITECTURE CONNECTION
+    ## EVIDENCE AND TRADEOFF
+    ## PRODUCTION EVOLUTION
+    ## IF THEY PUSH FURTHER
   </output-format>
 </poml>`
 };
