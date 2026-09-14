@@ -4,6 +4,8 @@ const typingIndicator = document.getElementById("typing-indicator");
 
 // Chat state
 let messages = [];
+let activeConversationId = null;
+let conversationSaveTimer = null;
 let isHelpOverlayOpen = false;
 let isTypingSessionModeEnabled = true;
 let renderAssistantHtml = false;
@@ -39,6 +41,65 @@ const liveTranscription = {
 
 function getElectronAPI() {
   return window.__TEST_ELECTRON_API__ || window.electronAPI;
+}
+
+function createConversationId() {
+  return window.crypto?.randomUUID?.() || `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function scheduleConversationSave() {
+  const electronAPI = getElectronAPI();
+  if (!electronAPI?.saveConversation || messages.length === 0) return;
+  if (!activeConversationId) activeConversationId = createConversationId();
+  const conversationId = activeConversationId;
+  const messageSnapshot = messages.map((message) => ({ ...message }));
+  if (conversationSaveTimer) clearTimeout(conversationSaveTimer);
+  conversationSaveTimer = setTimeout(() => {
+    electronAPI.saveConversation({ id: conversationId, messages: messageSnapshot }).catch((error) => {
+      debugLog("Conversation save failed", { message: error?.message });
+    });
+  }, 250);
+}
+
+function renderStoredConversation(conversation) {
+  if (!conversation) return;
+  activeConversationId = conversation.id;
+  messages = Array.isArray(conversation.messages) ? conversation.messages : [];
+  chatHistory.innerHTML = "";
+
+  for (const message of messages) {
+    const messageEl = document.createElement("div");
+    if (message.type === "assistant") {
+      messageEl.className = "message assistant";
+      if (message.messageId) messageEl.setAttribute("data-message-id", message.messageId);
+      const contentWrapper = document.createElement("div");
+      contentWrapper.className = "message-content markdown-body";
+      renderAssistantContent(contentWrapper, message.content, message.status === "completed");
+      messageEl.appendChild(contentWrapper);
+    } else if (message.type === "screenshot") {
+      messageEl.className = "message user";
+      const image = document.createElement("img");
+      image.className = "screenshot-thumbnail";
+      image.alt = "Saved screenshot";
+      image.src = `file://${message.filePath}`;
+      messageEl.appendChild(image);
+    } else {
+      messageEl.className = message.type === "error" ? "message error" : "message user";
+      messageEl.textContent = message.content || "";
+    }
+    chatHistory.appendChild(messageEl);
+  }
+  updateNullStateVisibility();
+  scrollToBottom();
+}
+
+async function restoreMostRecentConversation() {
+  const electronAPI = getElectronAPI();
+  if (!electronAPI?.listConversations || !electronAPI?.getConversation) return;
+  const conversations = await electronAPI.listConversations();
+  if (!conversations?.length) return;
+  const conversation = await electronAPI.getConversation(conversations[0].id);
+  renderStoredConversation(conversation);
 }
 
 function debugLog(message, data = {}) {
@@ -354,6 +415,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderAssistantHtml = false;
   }
   setupEventListeners();
+  restoreMostRecentConversation().catch((error) => {
+    debugLog("Conversation restore failed", { message: error?.message });
+  });
 });
 
 // Set up event listeners
@@ -401,6 +465,7 @@ function setupEventListeners() {
 
   // Handle new screenshots
   electronAPI.onScreenshotCaptured(addScreenshotToChat);
+  electronAPI.onOpenConversation?.(renderStoredConversation);
 
   // Handle chat reset
   electronAPI.onResetChat(resetChat);
@@ -806,6 +871,7 @@ function updateMessage(data) {
         content: "",
         status: "pending",
       });
+      scheduleConversationSave();
     }
     // Show typing indicator for new messages
     typingIndicator.classList.add("visible");
@@ -831,6 +897,7 @@ function updateMessage(data) {
     if (messageIndex !== -1) {
       messages[messageIndex].content = content;
       messages[messageIndex].status = "completed";
+      scheduleConversationSave();
     }
   }
 }
@@ -876,6 +943,7 @@ function showPreviewExampleOutput(payload = {}) {
     content: prompt,
   };
   messages.push(userMessage);
+  scheduleConversationSave();
 
   const userMessageEl = document.createElement("div");
   userMessageEl.className = "message user";
@@ -891,6 +959,7 @@ function showPreviewExampleOutput(payload = {}) {
     status: "completed",
   };
   messages.push(assistantMessage);
+  scheduleConversationSave();
 
   const assistantMessageEl = createMessageElement(messageId);
   if (payload.previewMode === "horizontal") {
@@ -926,6 +995,7 @@ async function addScreenshotToChat(data) {
   };
 
   messages.push(message);
+  scheduleConversationSave();
 
   const messageEl = document.createElement("div");
   messageEl.className = "message user";
@@ -970,6 +1040,7 @@ async function addScreenshotToChat(data) {
       content: "",
       status: "pending",
     });
+    scheduleConversationSave();
   } catch (error) {
     typingIndicator.classList.remove("visible");
     addErrorMessage(error.message);
@@ -978,6 +1049,8 @@ async function addScreenshotToChat(data) {
 
 // Reset chat
 function resetChat() {
+  scheduleConversationSave();
+  activeConversationId = null;
   chatHistory.innerHTML = "";
   messages = [];
   finalizeLiveTranscription("Input");
@@ -1222,6 +1295,7 @@ async function handleTestResponse(prompt) {
       content: prompt,
     };
     messages.push(userMessage);
+    scheduleConversationSave();
 
     const userMessageEl = document.createElement("div");
     userMessageEl.className = "message user";
@@ -1242,6 +1316,7 @@ async function handleTestResponse(prompt) {
       status: "pending",
     };
     messages.push(assistantMessage);
+    scheduleConversationSave();
 
     const assistantMessageEl = createMessageElement(messageId);
     chatHistory.appendChild(assistantMessageEl);
@@ -1261,6 +1336,7 @@ async function handleTestResponse(prompt) {
     }
     assistantMessage.content = result.content;
     assistantMessage.status = "completed";
+    scheduleConversationSave();
 
     // Hide typing indicator
     typingIndicator.classList.remove("visible");

@@ -37,6 +37,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveSettings: (settings) => ipcRenderer.invoke("save-settings", settings),
   uploadInterviewDocument: (kind) => ipcRenderer.invoke("upload-interview-document", kind),
   getOpenAIUsage: () => ipcRenderer.invoke("get-openai-usage"),
+  listConversations: () => ipcRenderer.invoke("list-conversations"),
+  getConversation: (id) => ipcRenderer.invoke("get-conversation", id),
+  saveConversation: (conversation) => ipcRenderer.invoke("save-conversation", conversation),
+  openConversation: (id) => ipcRenderer.invoke("open-conversation", id),
+  onOpenConversation: (callback) =>
+    ipcRenderer.on("open-conversation", (_, conversation) => callback(conversation)),
   copyTextToClipboard: (text) => ipcRenderer.invoke("copy-text-to-clipboard", text),
 
   // Show settings window

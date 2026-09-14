@@ -1,51 +1,89 @@
-# Trellis Panel Interview Test Prompts
+# Trellis Technical CTO Interview Test Prompts
 
-Select **Trellis Panel Interview (Python/Full Stack/AWS)** in Settings, upload the Trellis résumé and job description, and use one prompt at a time.
+Select **Trellis Full-Stack Interview Copilot v2 (Coding + System Design)** in Settings, upload the resume and job description, and use one prompt at a time.
 
-## COO: Ownership and Delivery
+These are technical, CTO-style prompts for a launch-stage annuity platform using React, Rust, AWS, APIs, automated delivery, and production observability.
+
+## Customer Application System Design
 
 ```text
-We’re preparing to launch a customer-facing insurance platform. Tell me about a time you owned a feature from an ambiguous requirement through deployment and post-launch support.
+Design the first production version of an annuity application platform. Independent agents create applications for customers, customers can review and sign, underwriting makes a decision, and operations users resolve exceptions. Start with the clarifying questions that materially change the design.
 ```
 
-## CEO: Startup Judgment and Motivation
+## Underwriting Integration Reliability
 
 ```text
-Why Trellis, and why does an early-stage customer-facing financial-protection platform appeal to you?
+An application submission calls a third-party underwriting provider that can time out, return duplicate callbacks, or be unavailable for several minutes. Design the API and background-processing flow so we do not lose applications, double-submit work, or show customers misleading status.
 ```
 
-## Technical Lead: Python API Design
+## React Live Coding
 
 ```text
-We have a Django API that creates a customer application and calls a downstream underwriting service. How would you design it to handle validation, timeouts, retries, idempotency, and observability?
+Build a TypeScript React component for an agent to search applications by customer name or application ID. It should debounce requests, cancel stale requests, show loading, error, empty, and result states, and remain accessible. Include focused tests.
 ```
 
-## Technical Lead: Python Live Coding
+## Rust API Design
 
 ```text
-Let’s write a small Python service class that processes application-status events. It should reject invalid events, ignore duplicate event IDs, keep accepted events ordered per application ID, and be safe when called concurrently. Include focused pytest tests and explain your choices as you work.
+We are adding a Rust service that accepts a signed application submission and publishes it for underwriting. Walk through the handler design: request validation, idempotency keys, authorization, database transaction boundaries, error responses, and tests. Show the first useful Rust implementation slice.
 ```
 
-## Full-Stack: React Customer Experience
+## Event Ordering and Idempotency
 
 ```text
-A customer application flow in React has become slow and difficult to change as we add new questions. How would you investigate the performance issue and restructure the frontend without breaking the customer experience?
+Underwriting status events arrive at least once and occasionally out of order. How would you model and process them so the application timeline is correct, duplicate delivery is safe, and operators can audit why a status changed?
 ```
 
-## Technical Lead: Rust Bridge
+## Data Model and Audit Trail
 
 ```text
-Our backend uses Rust in a few services. You have stronger verified experience in Python, Go, TypeScript, and Java—how would you become productive in Rust while keeping quality high?
-```
-
-## Panel System Design
-
-```text
-Design the first version of a customer insurance application platform. Customers should save progress, submit an application, receive status updates, and allow internal operations users to review applications. Start by asking the questions that would materially affect the design.
+Model applicants, applications, signatures, underwriting decisions, status history, agent access, and audit events. Explain the relational schema, indexes, retention considerations, and which data must be immutable.
 ```
 
 ## Production Debugging
 
 ```text
-After a deployment, customers report that application submissions occasionally remain stuck in “processing.” Walk us through how you would investigate, mitigate, and prevent that issue.
+After a release, a small percentage of submitted applications stay in processing even though the underwriting provider reports a decision. Explain your exact investigation path, immediate mitigation, root-cause validation, durable fix, and prevention work.
+```
+
+## Observability
+
+```text
+What logs, metrics, traces, dashboards, and alerts would you add before launch for the application submission and underwriting workflow? Explain how each signal would help an on-call engineer diagnose a customer-impacting failure.
+```
+
+## CI/CD and Safe Releases
+
+```text
+Describe a pragmatic CI/CD pipeline for a React frontend and Rust backend deployed to AWS. Include unit and integration tests, migrations, infrastructure changes, secrets, security checks, progressive rollout, rollback, and post-deploy verification.
+```
+
+## Infrastructure as Code
+
+```text
+How would you structure Terraform for a small team operating multiple AWS environments? Explain state management, environment isolation, least-privilege IAM, review workflow, drift detection, and how you would make a risky infrastructure change safely.
+```
+
+## Security and Privacy Review
+
+```text
+Before launch, how would you review a customer-facing financial application for authentication, authorization, PII exposure, secrets handling, auditability, dependency risk, and secure operational access? Prioritize the highest-risk controls first.
+```
+
+## Performance Investigation
+
+```text
+The operations dashboard is slow when users filter applications by status, agent, and date range. Walk through how you would measure the problem across React, the API, and the database, identify the bottleneck, implement the smallest effective fix, and prove the improvement.
+```
+
+## Architecture Tradeoffs
+
+```text
+For the initial launch, would you choose a modular monolith, several microservices, or a hybrid? Defend the decision for a small team building a customer-facing annuity platform with external integrations, compliance-sensitive data, and a need to move quickly.
+```
+
+## AI Development Tooling
+
+```text
+How would you introduce AI-powered development tools into this engineering organization without weakening code review, security, testing, ownership, or auditability? Give concrete guardrails and a rollout plan.
 ```

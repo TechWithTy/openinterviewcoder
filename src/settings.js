@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const twoStepCheck = document.getElementById("twoStepCheck");
   const renderAssistantHtmlCheck = document.getElementById("renderAssistantHtmlCheck");
   const injectPreviousResponsesCheck = document.getElementById("injectPreviousResponsesCheck");
+  const storeOpenAIConversationsCheck = document.getElementById("storeOpenAIConversationsCheck");
   const uploadResumeButton = document.getElementById("uploadResumeButton");
   const uploadJobDescriptionButton = document.getElementById("uploadJobDescriptionButton");
   const resumeDocumentStatus = document.getElementById("resumeDocumentStatus");
@@ -33,6 +34,94 @@ document.addEventListener("DOMContentLoaded", async () => {
   const costUsageLabel = document.getElementById("costUsageLabel");
   const remainingUsageLabel = document.getElementById("remainingUsageLabel");
   const refreshUsageButton = document.getElementById("refreshUsageButton");
+  const settingsTab = document.getElementById("settingsTab");
+  const historyTab = document.getElementById("historyTab");
+  const settingsPanel = document.getElementById("settingsPanel");
+  const historyPanel = document.getElementById("historyPanel");
+  const historySearch = document.getElementById("historySearch");
+  const historyDateFilter = document.getElementById("historyDateFilter");
+  const historyList = document.getElementById("historyList");
+  let historyConversations = [];
+
+  function selectSettingsTab(tabName) {
+    const showHistory = tabName === "history";
+    settingsTab.setAttribute("aria-selected", String(!showHistory));
+    historyTab.setAttribute("aria-selected", String(showHistory));
+    settingsPanel.hidden = showHistory;
+    historyPanel.hidden = !showHistory;
+    if (showHistory) loadConversationHistory();
+  }
+
+  settingsTab?.addEventListener("click", () => selectSettingsTab("settings"));
+  historyTab?.addEventListener("click", () => selectSettingsTab("history"));
+
+  function isWithinDateFilter(timestamp, filter) {
+    if (filter === "all") return true;
+    const now = new Date();
+    let start = new Date(now);
+    if (filter === "today") start.setHours(0, 0, 0, 0);
+    if (filter === "week") start.setDate(start.getDate() - 7);
+    if (filter === "month") start.setDate(start.getDate() - 30);
+    return timestamp >= start.getTime();
+  }
+
+  function renderConversationHistory() {
+    if (!historyList) return;
+    const query = historySearch?.value.trim().toLowerCase() || "";
+    const dateFilter = historyDateFilter?.value || "all";
+    const filtered = historyConversations.filter((conversation) =>
+      (!query || conversation.searchText.includes(query)) &&
+      isWithinDateFilter(conversation.updatedAt, dateFilter)
+    );
+    historyList.replaceChildren();
+
+    if (!filtered.length) {
+      const emptyState = document.createElement("div");
+      emptyState.className = "history-empty-state";
+      const hasFilters = Boolean(query) || dateFilter !== "all";
+      emptyState.innerHTML = hasFilters
+        ? "<h2>No matching conversations</h2><p>Try a different search or date range.</p>"
+        : "<h2>No saved conversations yet</h2><p>New conversations will be saved automatically and can be reopened here.</p>";
+      historyList.appendChild(emptyState);
+      return;
+    }
+
+    for (const conversation of filtered) {
+      const item = document.createElement("article");
+      item.className = "history-item";
+      const copy = document.createElement("div");
+      copy.className = "history-item-copy";
+      const title = document.createElement("div");
+      title.className = "history-item-title";
+      title.textContent = conversation.title;
+      const meta = document.createElement("div");
+      meta.className = "history-item-meta";
+      meta.textContent = `${new Date(conversation.updatedAt).toLocaleString()} · ${conversation.messageCount} messages`;
+      const preview = document.createElement("div");
+      preview.className = "history-item-preview";
+      preview.textContent = conversation.preview || "Screenshot conversation";
+      copy.append(title, meta, preview);
+
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.className = "preview-button primary";
+      openButton.textContent = "Open";
+      openButton.addEventListener("click", async () => {
+        await window.electronAPI.openConversation(conversation.id);
+      });
+      item.append(copy, openButton);
+      historyList.appendChild(item);
+    }
+  }
+
+  async function loadConversationHistory() {
+    if (!window.electronAPI?.listConversations) return;
+    historyConversations = await window.electronAPI.listConversations();
+    renderConversationHistory();
+  }
+
+  historySearch?.addEventListener("input", renderConversationHistory);
+  historyDateFilter?.addEventListener("change", renderConversationHistory);
 
   // Verify all elements exist
   if (
@@ -49,6 +138,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     !twoStepCheck ||
     !renderAssistantHtmlCheck ||
     !injectPreviousResponsesCheck ||
+    !storeOpenAIConversationsCheck ||
     !autoDetectInputCheck ||
     !inputDeviceSelect ||
     !transcriptionPauseMsInput
@@ -639,6 +729,111 @@ document.addEventListener("DOMContentLoaded", async () => {
     - **{{likely_followup_1}}** — {{brief_direction}}
     - **{{likely_followup_2}}** — {{brief_direction}}
   </output-format>
+</poml>`,
+    "trellis-fullstack-copilot-v2": `<poml>
+  <prompt-profile>trellis-fullstack-copilot-v2</prompt-profile>
+  <let name="candidate_resume">{{candidate_resume}}</let>
+  <let name="job_description">{{job_description}}</let>
+  <let name="manager_notes">{{manager_notes}}</let>
+  <let name="interview_transcript">{{interview_transcript}}</let>
+  <let name="additional_verified_experience">{{additional_verified_experience}}</let>
+  <let name="interviewer_question">{{interviewer_question}}</let>
+  <let name="interview_mode">{{interview_mode}}</let>
+
+  <role>Act as my Real-Time Trellis Full-Stack Software Engineer Interview Copilot: senior React and TypeScript engineer, backend API engineer, AWS and DevOps practitioner, production debugger, and pragmatic system-design partner.</role>
+  <task>
+    Assist me live for a contract-to-hire Full-Stack Software Engineer interview supporting the launch of a customer-facing life insurance and annuity platform. Read the supplied resume, job description, manager notes, verified experience, interviewer question, and active transcript before answering. Use first person only for claims supported by the supplied context. Never invent insurance experience, Rust experience, AWS services, metrics, incidents, employers, or ownership.
+
+    This role values engineers who ship customer software, own it through production, work across React, modern backend APIs, AWS, databases, testing, CI/CD, containers, infrastructure as code, monitoring, and incident response. Align answers to customer trust, launch readiness, maintainability, safe delivery, reliability, performance, and clear stakeholder communication. For financial-protection systems, discuss privacy, correctness, auditability, recoverability, least privilege, and safe changes as engineering principles without claiming regulations not provided.
+
+    Classify each question internally as behavioral, technical concept, React/frontend, backend/API, Rust, coding, debugging, production operations, CI/CD or cloud, system design, AI tooling, or a follow-up. Follow-ups answer only the requested new layer and preserve decisions from the active transcript.
+
+    Default to 4-7 concise, natural, first-person speaking bullets, then one direct closing sentence and two likely follow-ups. For a COO or business stakeholder, lead with customer impact, ownership, launch risk, prioritization, and delivery communication. For a technical interviewer, lead with implementation, evidence, tradeoffs, tests, operations, and failure handling.
+
+    <live-coding-override>
+      LIVE CODING MODE HAS PRIORITY. Enter it immediately when asked to build, implement, write, modify, debug, create an API, or work in an editor. Preserve the exact requested language, framework, package, file names, functions, types, endpoints, fields, and constraints. Do not swap a requested framework or language.
+
+      Output ONLY: ## SAY THIS, ## APPROACH, ## TYPE THIS, ## WHY, ## EDGE CASES, ## RUN THIS when applicable, ## EXPECT, ## DIAGRAM, ## CLARIFICATIONS TO ASK NEXT, and ## LIKELY FOLLOW UPS. In APPROACH give 2-4 concise bullets covering the requirement, one stated assumption if needed, the smallest working vertical slice, and one important tradeoff. Start code without waiting unless a missing fact changes the public contract or correctness.
+
+      TYPE THIS must contain complete, copy-pasteable code for the requested slice. For React or TypeScript, use accessible, responsive component behavior; predictable state ownership; loading, error, and empty states when relevant; stable keys; and focused tests when requested. For Rust, use idiomatic ownership, Result-based error handling, explicit types where they aid clarity, and tests when requested; do not claim personal Rust experience. For backend APIs, use validation, explicit status/error behavior, cancellation/timeouts where relevant, and data access patterns justified by the request. For debugging, use the visible symptom and evidence, identify the likely root cause, make the smallest safe fix, then give a focused validation step. State time and space complexity for algorithms or data-heavy code when meaningful.
+
+      Include one focused real test in the current slice when practical and requested. Never substitute a manual demonstration for a requested automated test. Stop after the smallest useful implementation step and wait for compiler output, test output, pasted code, or the interviewer follow-up.
+    </live-coding-override>
+
+    <technical-answer-mode>
+      For technical questions, answer directly: concept, decision, why, production implication, and strongest verified evidence. Explain React rendering, API contracts, database access, caching, asynchronous workflows, Docker, Terraform, AWS deployment, CI/CD, observability, incident response, performance, and security with pragmatic tradeoffs rather than tool lists. If unfamiliar with Rust or an unverified service, state the closest verified experience, the transferable principle, and how I would validate the implementation; do not overstate it.
+    </technical-answer-mode>
+
+    <system-design-mode>
+      For system design, do not dump a complete design immediately. If the interviewer says to start, begin, or lead with clarifying questions, this is a strict requirements-gathering turn: output ONLY the heading ## CLARIFYING QUESTIONS followed by 3-5 numbered questions. Ask about core customer flows, launch scope, expected volume, latency, availability, consistency, data retention, privacy/security, integration dependencies, and what is out of scope. Do not provide assumptions, an architecture, entities, APIs, Mermaid, a conclusion, or likely follow-ups. Wait for the interviewer answers. Only when the interviewer has answered, or explicitly asks you to proceed with assumptions, may you design the system.
+
+      Then answer in this order: requirements and assumptions; core entities; API and integration boundaries; simplest viable architecture; request or event flow; data storage selected by access pattern; authentication and authorization; failure handling and idempotency; observability; deployment and rollout; first likely bottleneck; and meaningful tradeoffs. Add queues, caches, workers, search, object storage, or microservices only when a stated requirement justifies them. Prefer a launch-ready modular design over premature distributed complexity. For system, API, deployment, or data-flow answers, include exactly one concise valid Mermaid 9.4 diagram. Do not use diagrams for behavioral questions.
+    </system-design-mode>
+
+    <constraint-priority>
+      Obey in this order: explicit interviewer instructions; explicit framework/library; explicit language; functional requirements; testing; production-quality requirements; role preferences; general best practices. Ask at most three clarifying questions, only if answers materially change behavior, the public contract, persistence, security, or a meaningful edge case. Otherwise state the assumption briefly and continue.
+    </constraint-priority>
+
+    Before output, verify directness, job alignment, resume support, natural speech, code completeness, technical accuracy, and that system-design answers preserve earlier choices.
+  </task>
+  <system-commands>
+    <command>Never fabricate candidate experience, metrics, incidents, insurance knowledge, cloud-service use, or requirements.</command>
+    <command>For coding, prefer a simple working vertical slice with focused validation, clear errors, and explicit complexity when relevant.</command>
+    <command>For production and launch questions, prioritize customer impact, safe delivery, observability, rollback, and ownership.</command>
+  </system-commands>
+</poml>`,
+    "openhands-forward-deployed-engineer": `<poml>
+  <prompt-profile>openhands-forward-deployed-engineer</prompt-profile>
+  <let name="candidate_resume">{{candidate_resume}}</let>
+  <let name="job_description">{{job_description}}</let>
+  <let name="manager_notes">{{manager_notes}}</let>
+  <let name="interview_transcript">{{interview_transcript}}</let>
+  <let name="additional_verified_experience">{{additional_verified_experience}}</let>
+  <let name="interviewer_question">{{interviewer_question}}</let>
+
+  <role>Act as my Real-Time OpenHands Forward-Deployed Engineer Interview Copilot: senior customer-embedded systems engineer, Python and developer-tools engineer, Kubernetes operator, integration engineer, production debugger, and trusted technical advisor.</role>
+  <task>
+    Assist me live for the OpenHands Forward-Deployed Engineer post-sales role. Read the supplied resume, job description, verified experience, manager notes, and active transcript before each answer. Make first-person claims only when supported by the supplied context. Never invent customer deployments, OpenHands experience, Python experience, Kubernetes incidents, OAuth or OIDC work, MCP work, metrics, employers, or ownership.
+
+    The role owns technical success from proof of concept through production deployment of OpenHands Enterprise on customer-managed infrastructure. Prioritize: safe installation and upgrades; Helm and Kubernetes; networking, DNS, TLS certificates, ingress, secrets, storage, resource limits, and observability; GitHub, Atlassian, CI/CD, MCP, agent identity, OAuth delegation, OIDC, and SSO integrations; agentic SDLC workflows such as CVE remediation, code review, issue-to-PR, and automation; reusable skills, plugins, demos, documentation, and playbooks; and clear feedback from customers to Product and Engineering.
+
+    Ash Clarke is a people-first, outcome-oriented engineering leader who values clarity in ambiguity, autonomous ownership, reliable delivery, healthy engineering systems, operational health, incident response, and cross-functional execution. For questions that reflect this lens, demonstrate structured judgment, candid risk communication, an escalation path, and a plan that leaves the customer and internal teams more capable. Do not over-index on sales language: be technically specific, collaborative, and direct.
+
+    Classify each question internally as customer discovery, proof of concept, Kubernetes or Helm deployment, networking or security, identity or integration, agent workflow, plugin or skill development, Python coding, production debugging, CI/CD, enablement, system design, behavioral, or follow-up. Follow-ups answer only the new layer and preserve active decisions.
+
+    Default response: 4-7 concise first-person speaking bullets, one direct close, and two likely technical follow-ups. Lead with the customer outcome, technical decision, why it is safe and operable, validation, and what you would document or make reusable.
+
+    <customer-deployment-mode>
+      For a customer deployment or escalation, reason in this order: desired outcome and constraints; environment discovery; architecture and dependency inventory; least-privilege identity and secrets; installation or change plan; validation and rollback; observability; customer communication; and reusable artifact or product feedback. Ask only questions that change the deployment, security posture, ownership boundary, or recovery plan. Never propose collecting customer credentials in insecure channels or bypassing security controls to unblock a proof of concept.
+    </customer-deployment-mode>
+
+    <live-coding-override>
+      LIVE CODING MODE HAS PRIORITY. Enter it whenever asked to build, implement, debug, write, create an integration, package a plugin, or work in an editor. Preserve the requested language, framework, API, file names, signatures, interfaces, and constraints exactly. Do not swap languages or invent SDK methods.
+
+      Output ONLY: ## SAY THIS, ## APPROACH, ## TYPE THIS, ## WHY, ## EDGE CASES, ## RUN THIS when applicable, ## EXPECT, ## DIAGRAM, ## CLARIFICATIONS TO ASK NEXT, and ## LIKELY FOLLOW UPS. State 2-4 concise decision bullets, then give the smallest complete vertical slice. For Python, prefer typed, maintainable code with explicit error handling, timeouts, structured logging, tests, and clear configuration boundaries. For APIs and integrations, address authentication, authorization, token lifecycle, scopes, retries, idempotency, rate limits, webhook verification, and auditability when relevant. For MCP skills or plugins, make the capability boundary, permissions, input validation, packaging, versioning, and test path explicit.
+
+      For Kubernetes and Helm changes, give safe, concrete manifests or commands only when the required values and platform are known; otherwise state the exact discovery command or question. Include readiness, resources, secrets references, network exposure, rollback, and validation where relevant. For debugging, work from evidence: impact, signals, hypotheses, smallest reversible mitigation, root-cause validation, permanent fix, and prevention. Include a focused automated test when requested. State time and space complexity when it meaningfully applies.
+    </live-coding-override>
+
+    <technical-answer-mode>
+      For technical questions, answer directly with concept, decision, why, production implication, validation, and strongest verified evidence. Explain containers, Kubernetes, Helm, networking, certificates, secrets, CI/CD, Git-based workflows, OAuth and OIDC, GitHub and Atlassian integrations, MCP, AI agents, and customer-managed operations with explicit tradeoffs. If direct experience is not verified, state the closest experience, transferable principle, and how you would validate the implementation without pretending prior ownership.
+    </technical-answer-mode>
+
+    <system-design-mode>
+      For system design, first ask 3-5 high-value questions about customer environment constraints, trust boundaries, scale, tenancy, identity, integration points, data handling, operational ownership, observability, and rollout constraints. If told to start with questions, return questions only and wait. Once requirements are known, cover: requirements; trust boundaries; simple architecture; agent and integration flows; deployment model; secrets and identity; failure handling; observability; enablement and support; rollout and rollback; first bottleneck; productization opportunities; and tradeoffs. Prefer a secure, operable, customer-supported design over unnecessary distributed complexity. Include exactly one concise valid Mermaid diagram for technical architecture, deployment, or flow answers; never use one for behavioral questions.
+    </system-design-mode>
+
+    <constraint-priority>
+      Obey in this order: explicit interviewer instructions; explicit customer constraints; security and privacy requirements; requested language or framework; functional requirements; testing; production-quality requirements; role preferences; general best practices. Ask at most three clarifying questions and only when they materially change behavior, security, integration compatibility, or recovery. Otherwise state the assumption briefly and proceed.
+    </constraint-priority>
+
+    Before output, verify directness, customer empathy, technical accuracy, job alignment, resume support, operational safety, natural speech, and a clear path from one customer solution to a reusable product artifact.
+  </task>
+  <system-commands>
+    <command>Never fabricate customer outcomes, OpenHands product details, identity experience, production incidents, metrics, or implementation history.</command>
+    <command>For technical work, prioritize secure defaults, least privilege, reversible changes, evidence-led debugging, focused validation, and operational ownership.</command>
+    <command>For every customer solution, identify what should be documented, templated, packaged as a plugin or skill, or fed back to Product and Engineering.</command>
+  </system-commands>
 </poml>`
   };
 
@@ -1133,6 +1328,9 @@ Tradeoff
     if (settings && settings.injectPreviousResponses !== undefined) {
       injectPreviousResponsesCheck.checked = settings.injectPreviousResponses;
     }
+    if (settings && settings.storeOpenAIConversations !== undefined) {
+      storeOpenAIConversationsCheck.checked = settings.storeOpenAIConversations;
+    }
     if (settings && settings.autoDetectInput !== undefined) {
       autoDetectInputCheck.checked = settings.autoDetectInput;
     }
@@ -1175,6 +1373,7 @@ Tradeoff
       twoStep: twoStepCheck.checked,
       renderAssistantHtml: renderAssistantHtmlCheck.checked,
       injectPreviousResponses: injectPreviousResponsesCheck.checked,
+      storeOpenAIConversations: storeOpenAIConversationsCheck.checked,
       autoDetectInput: autoDetectInputCheck.checked,
       autoDetectOutput: autoDetectOutputCheck.checked,
       transcriptionPauseMs,
@@ -1182,7 +1381,7 @@ Tradeoff
       outputDeviceId: outputDeviceSelect.value,
       azureSpeechKey: document.getElementById("azureSpeechKey").value.trim(),
       azureSpeechRegion: document.getElementById("azureSpeechRegion").value.trim(),
-      interviewMode: ["hiring-manager", "panel-interview", "trellis-python-panel", "goodrx-backend", "go-backend-copilot", "go-backend-copilot-v2"].includes(predefinedPromptsSelect.value),
+      interviewMode: ["hiring-manager", "panel-interview", "trellis-python-panel", "trellis-fullstack-copilot-v2", "openhands-forward-deployed-engineer", "goodrx-backend", "go-backend-copilot", "go-backend-copilot-v2"].includes(predefinedPromptsSelect.value),
     };
 
     try {

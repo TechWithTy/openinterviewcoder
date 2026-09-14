@@ -47,6 +47,17 @@ test.describe("LLM prompt composition", () => {
     expect(prompt).toContain("MUST include exactly one valid Mermaid diagram");
   });
 
+  test("forces Trellis system-design requests that ask for clarification into a questions-only turn", () => {
+    const prompt = __test__.buildTaskPrompt(
+      "Design an annuity application platform. Start with the clarifying questions that materially change the design.",
+      "<prompt-profile>trellis-fullstack-copilot-v2</prompt-profile>"
+    );
+
+    expect(prompt).toContain("Trellis System Design Clarifying-Questions Gate");
+    expect(prompt).toContain("Return ONLY this exact structure");
+    expect(prompt).toContain("Do NOT provide assumptions, an architecture");
+  });
+
   test("requires a Mermaid diagram for technical hiring manager responses", () => {
     const prompt = __test__.buildTaskPrompt(
       "Explain the production architecture you owned.",

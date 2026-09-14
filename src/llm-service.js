@@ -293,6 +293,20 @@ Format your responses in sections:
 • Suggested Actions (if applicable)
 • Technical Notes (if code/data is present)`;
 
+const TRELLIS_CLARIFYING_QUESTIONS_GATE = `
+
+--- Trellis System Design Clarifying-Questions Gate ---
+The interviewer explicitly asked to start with clarifying questions. This is a requirements-gathering turn, not a design-answer turn.
+Return ONLY this exact structure:
+## CLARIFYING QUESTIONS
+1. [question]
+2. [question]
+3. [question]
+4. [optional question]
+5. [optional question]
+
+Ask 3-5 concrete questions whose answers materially affect customer flows, roles and permissions, volume and latency, underwriting integrations, consistency and idempotency, data retention, privacy/security, or launch scope. Do NOT provide assumptions, an architecture, entities, APIs, implementation steps, Mermaid, a conclusion, likely follow-ups, or any answer beyond those questions. Wait for the interviewer answers before designing.`;
+
 let isInitialized = false;
 
 async function getOrganizationUsage() {
@@ -409,13 +423,17 @@ ${normalizedUserPrompt}`;
   const requiresCode = isCodeImplementationRequest(normalizedUserPrompt, normalizedConfiguredPrompt);
   const requiresHumaV2 = requiresCode && isHumaV2Request(normalizedUserPrompt);
   const isGoV2 = isGoBackendCopilotV2(normalizedConfiguredPrompt);
+  const isTrellisFullStackV2 = /<prompt-profile>\s*trellis-fullstack-copilot-v2\s*<\/prompt-profile>/i.test(normalizedConfiguredPrompt);
+  const asksForClarifyingQuestions = /\b(?:start|begin)\b[^.!?\n]{0,100}\b(?:clarifying|questions?)\b|\bclarifying questions?\b/i.test(normalizedUserPrompt);
+  const isTrellisClarifyingSystemDesignRequest = isTrellisFullStackV2 &&
+    /\bdesign\b/i.test(normalizedUserPrompt) && asksForClarifyingQuestions;
   return `${basePrompt}${interviewContext}${requiresCode ? "" : MERMAID_GUIDANCE}${
     !requiresCode && isSystemDesignPrompt ? SYSTEM_DESIGN_MERMAID_REQUIREMENT : ""
   }${!requiresCode && isHiringManagerPrompt ? HIRING_MANAGER_MERMAID_REQUIREMENT : ""}${
     requiresCode ? CODE_IMPLEMENTATION_REQUIREMENT : ""
   }${isGoV2 && requiresCode ? PRACTICAL_GO_TECHNICAL_SCREEN_REQUIREMENT : ""}${
     requiresHumaV2 ? HUMA_V2_VERIFIED_PATTERNS : ""
-  }`;
+  }${isTrellisClarifyingSystemDesignRequest ? TRELLIS_CLARIFYING_QUESTIONS_GATE : ""}`;
 }
 
 function buildInterviewDocumentContext() {
@@ -762,6 +780,7 @@ async function makeLLMRequest(event, data) {
         },
         data: {
           model: visionModel,
+          store: config.getStoreOpenAIConversations(),
           messages: isReasoningVisionModel
             ? [{
                 role: "user",
@@ -921,6 +940,7 @@ async function makeLLMRequest(event, data) {
   const requestData = {
     model: selectedModel,
     messages: messages,
+    store: config.getStoreOpenAIConversations(),
   };
 
   if (selectedModelUsesMaxCompletionTokens) {
@@ -1058,6 +1078,7 @@ module.exports = {
     LIVE_CODING_SYSTEM_PROMPT,
     HUMA_V2_VERIFIED_PATTERNS,
     PRACTICAL_GO_TECHNICAL_SCREEN_REQUIREMENT,
+    TRELLIS_CLARIFYING_QUESTIONS_GATE,
     isCodeImplementationRequest,
     isGoBackendCopilotV2,
     isHumaV2Request,

@@ -23,6 +23,11 @@ const {
 } = require("./screenshot");
 const { initializeLLMService, getOrganizationUsage } = require("./llm-service");
 const { extractDocument } = require("./document-service");
+const {
+  getConversation,
+  listConversations,
+  saveConversation,
+} = require("./conversation-store");
 const config = require("./config");
 
 const isDev = process.argv.includes("--debug") || process.argv.includes("--inspect");
@@ -248,6 +253,7 @@ ipcMain.handle("get-settings", () => {
     autoDetectOutput: config.getAutoDetectOutput(),
     renderAssistantHtml: config.getRenderAssistantHtml(),
     injectPreviousResponses: config.getInjectPreviousResponses(),
+    storeOpenAIConversations: config.getStoreOpenAIConversations(),
     transcriptionPauseMs: config.getTranscriptionPauseMs(),
     inputDeviceId: config.getInputDeviceId(),
     outputDeviceId: config.getOutputDeviceId(),
@@ -295,6 +301,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   if (settings.injectPreviousResponses !== undefined) {
     config.setInjectPreviousResponses(settings.injectPreviousResponses);
   }
+  if (settings.storeOpenAIConversations !== undefined) {
+    config.setStoreOpenAIConversations(settings.storeOpenAIConversations);
+  }
   if (settings.transcriptionPauseMs !== undefined) {
     config.setTranscriptionPauseMs(settings.transcriptionPauseMs);
   }
@@ -319,6 +328,17 @@ ipcMain.handle("save-settings", async (event, settings) => {
 });
 
 ipcMain.handle("get-openai-usage", () => getOrganizationUsage());
+ipcMain.handle("list-conversations", () => listConversations());
+ipcMain.handle("get-conversation", (_, id) => getConversation(String(id || "")));
+ipcMain.handle("save-conversation", (_, conversation) => saveConversation(conversation));
+ipcMain.handle("open-conversation", (_, id) => {
+  const conversation = getConversation(String(id || ""));
+  if (!conversation || !invisibleWindow) return false;
+  invisibleWindow.webContents.send("open-conversation", conversation);
+  settingsWindow?.hide();
+  showInvisibleWindow("history:open-conversation");
+  return true;
+});
 ipcMain.handle("copy-text-to-clipboard", (_, text) => {
   const value = String(text || "").trim();
   if (!value) return { success: false, error: "There is nothing to copy yet." };

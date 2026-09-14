@@ -15,7 +15,7 @@
         padding: 20px;
       }
       .settings-header {
-        margin-bottom: 30px;
+        margin-bottom: 18px;
       }
       .settings-title {
         font-size: 20px;
@@ -133,6 +133,101 @@
         font-size: 12px;
         color: #64748b;
       }
+      .settings-tabs {
+        display: flex;
+        gap: 6px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 24px;
+      }
+      .settings-tab {
+        appearance: none;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        color: #64748b;
+        cursor: pointer;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        padding: 10px 12px;
+      }
+      .settings-tab:hover {
+        color: #0f172a;
+      }
+      .settings-tab[aria-selected="true"] {
+        border-bottom-color: #007aff;
+        color: #007aff;
+      }
+      .settings-panel[hidden] {
+        display: none;
+      }
+      .history-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .history-search {
+        flex: 1;
+      }
+      .history-filter {
+        width: 150px;
+        margin: 0;
+      }
+      .history-empty-state {
+        border: 1px dashed #cbd5e1;
+        border-radius: 8px;
+        color: #64748b;
+        padding: 42px 24px;
+        text-align: center;
+      }
+      .history-empty-state h2 {
+        color: #334155;
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .history-empty-state p {
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0 auto;
+        max-width: 480px;
+      }
+      .history-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .history-item {
+        align-items: center;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        display: flex;
+        gap: 14px;
+        padding: 12px;
+      }
+      .history-item-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .history-item-title {
+        color: #1e293b;
+        font-size: 14px;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .history-item-meta, .history-item-preview {
+        color: #64748b;
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .history-item-preview {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
     </style>
   </head>
   <body>
@@ -141,6 +236,12 @@
         <h1 class="settings-title">Settings</h1>
       </div>
 
+      <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button class="settings-tab" id="settingsTab" type="button" role="tab" aria-selected="true" aria-controls="settingsPanel">Settings</button>
+        <button class="settings-tab" id="historyTab" type="button" role="tab" aria-selected="false" aria-controls="historyPanel">History</button>
+      </div>
+
+      <section class="settings-panel" id="settingsPanel" role="tabpanel" aria-labelledby="settingsTab">
       <div class="settings-section">
         <div class="setting-item">
           <label class="setting-label">OpenAI API Key</label>
@@ -304,6 +405,14 @@
         </div>
 
         <div class="setting-item">
+          <label class="setting-label">Store conversations with OpenAI</label>
+          <div class="setting-control" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="storeOpenAIConversationsCheck" style="width: auto;" />
+            <span style="color: #cbd5e1; font-size: 14px;">Save future Chat Completions to OpenAI-hosted storage. This is optional and cannot restore earlier chats.</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
           <label class="setting-label">Azure Speech Key</label>
           <div class="setting-control">
             <input type="password" id="azureSpeechKey" placeholder="Enter Azure Speech/Whisper key" />
@@ -332,6 +441,8 @@
               <option value="hiring-manager">Hiring Manager Interview</option>
               <option value="panel-interview">Executive + Technical Panel Interview</option>
               <option value="trellis-python-panel">Trellis Panel Interview (Python/Full Stack/AWS)</option>
+              <option value="trellis-fullstack-copilot-v2">Trellis Full-Stack Interview Copilot v2 (Coding + System Design)</option>
+              <option value="openhands-forward-deployed-engineer">OpenHands Forward-Deployed Engineer (Post Sales)</option>
               <option value="system-design">System Design Interview</option>
               <option value="goodrx-backend">GoodRx Backend Interview (Go/Kubernetes/AWS)</option>
               <option value="go-backend-copilot">Real-Time Go Backend Interview Copilot</option>
@@ -400,6 +511,25 @@
       </div>
 
       <button class="save-button" id="saveButton">Save</button>
+      </section>
+
+      <section class="settings-panel" id="historyPanel" role="tabpanel" aria-labelledby="historyTab" hidden>
+        <div class="history-toolbar">
+          <input class="history-search" id="historySearch" type="search" placeholder="Search conversations…" aria-label="Search conversations" />
+          <select class="history-filter" id="historyDateFilter" aria-label="Filter conversations by date">
+            <option value="all">All dates</option>
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="month">Last 30 days</option>
+          </select>
+        </div>
+        <div class="history-list" id="historyList" aria-live="polite">
+          <div class="history-empty-state">
+            <h2>No saved conversations yet</h2>
+            <p>New conversations will be saved automatically and can be reopened here.</p>
+          </div>
+        </div>
+      </section>
     </div>
     <script src="src/settings.js"></script>
   </body>

@@ -55,6 +55,7 @@ const store = new Store({
       autoDetectOutput: true,
       renderAssistantHtml: false,
       injectPreviousResponses: false,
+      storeOpenAIConversations: false,
       transcriptionPauseMs: 2500,
       inputDeviceId: "default",
       outputDeviceId: "default",
@@ -102,6 +103,8 @@ module.exports = {
   setRenderAssistantHtml: (val) => store.set("openai.renderAssistantHtml", Boolean(val)),
   getInjectPreviousResponses: () => store.get("openai.injectPreviousResponses") ?? false,
   setInjectPreviousResponses: (val) => store.set("openai.injectPreviousResponses", Boolean(val)),
+  getStoreOpenAIConversations: () => store.get("openai.storeOpenAIConversations") ?? false,
+  setStoreOpenAIConversations: (val) => store.set("openai.storeOpenAIConversations", Boolean(val)),
   getTranscriptionPauseMs: () => {
     const value = Number(store.get("openai.transcriptionPauseMs"));
     if (!Number.isFinite(value)) return 2500;
