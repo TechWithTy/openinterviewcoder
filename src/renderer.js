@@ -4,6 +4,8 @@ const typingIndicator = document.getElementById("typing-indicator");
 
 // Chat state
 let messages = [];
+let activeConversationId = null;
+let conversationSaveTimer = null;
 let isHelpOverlayOpen = false;
 let isTypingSessionModeEnabled = true;
 let renderAssistantHtml = false;
@@ -39,6 +41,65 @@ const liveTranscription = {
 
 function getElectronAPI() {
   return window.__TEST_ELECTRON_API__ || window.electronAPI;
+}
+
+function createConversationId() {
+  return window.crypto?.randomUUID?.() || `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function scheduleConversationSave() {
+  const electronAPI = getElectronAPI();
+  if (!electronAPI?.saveConversation || messages.length === 0) return;
+  if (!activeConversationId) activeConversationId = createConversationId();
+  const conversationId = activeConversationId;
+  const messageSnapshot = messages.map((message) => ({ ...message }));
+  if (conversationSaveTimer) clearTimeout(conversationSaveTimer);
+  conversationSaveTimer = setTimeout(() => {
+    electronAPI.saveConversation({ id: conversationId, messages: messageSnapshot }).catch((error) => {
+      debugLog("Conversation save failed", { message: error?.message });
+    });
+  }, 250);
+}
+
+function renderStoredConversation(conversation) {
+  if (!conversation) return;
+  activeConversationId = conversation.id;
+  messages = Array.isArray(conversation.messages) ? conversation.messages : [];
+  chatHistory.innerHTML = "";
+
+  for (const message of messages) {
+    const messageEl = document.createElement("div");
+    if (message.type === "assistant") {
+      messageEl.className = "message assistant";
+      if (message.messageId) messageEl.setAttribute("data-message-id", message.messageId);
+      const contentWrapper = document.createElement("div");
+      contentWrapper.className = "message-content markdown-body";
+      renderAssistantContent(contentWrapper, message.content, message.status === "completed");
+      messageEl.appendChild(contentWrapper);
+    } else if (message.type === "screenshot") {
+      messageEl.className = "message user";
+      const image = document.createElement("img");
+      image.className = "screenshot-thumbnail";
+      image.alt = "Saved screenshot";
+      image.src = `file://${message.filePath}`;
+      messageEl.appendChild(image);
+    } else {
+      messageEl.className = message.type === "error" ? "message error" : "message user";
+      messageEl.textContent = message.content || "";
+    }
+    chatHistory.appendChild(messageEl);
+  }
+  updateNullStateVisibility();
+  scrollToBottom();
+}
+
+async function restoreMostRecentConversation() {
+  const electronAPI = getElectronAPI();
+  if (!electronAPI?.listConversations || !electronAPI?.getConversation) return;
+  const conversations = await electronAPI.listConversations();
+  if (!conversations?.length) return;
+  const conversation = await electronAPI.getConversation(conversations[0].id);
+  renderStoredConversation(conversation);
 }
 
 function debugLog(message, data = {}) {
@@ -221,9 +282,15 @@ async function flushTranscriptionBuffer(source) {
       pauseMs: transcriptionPauseMs,
       length: payload.length,
     });
-    await getElectronAPI().processTranscription(
-      `Source: ${source}, Text: ${payload}`
+    const result = await getElectronAPI().processTranscription(
+      `Source: ${source}, Text: ${payload}`,
+      getPreviousAssistantResponseHistory()
     );
+    if (!result?.success) {
+      const message = result?.error || "The interview response could not be generated.";
+      debugLog("Transcription response generation failed", { source, message });
+      addErrorMessage(message);
+    }
   } catch (err) {
     console.error("Failed to process transcription with AI:", err);
     debugLog("Buffered transcription processing failed", {
@@ -348,6 +415,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderAssistantHtml = false;
   }
   setupEventListeners();
+  restoreMostRecentConversation().catch((error) => {
+    debugLog("Conversation restore failed", { message: error?.message });
+  });
 });
 
 // Set up event listeners
@@ -395,9 +465,24 @@ function setupEventListeners() {
 
   // Handle new screenshots
   electronAPI.onScreenshotCaptured(addScreenshotToChat);
+  electronAPI.onOpenConversation?.(renderStoredConversation);
 
   // Handle chat reset
   electronAPI.onResetChat(resetChat);
+  electronAPI.onCopyLastAIOutput?.(() => {
+    copyTextToClipboard(getLastAIOutput(), "Latest AI response").catch((error) => addErrorMessage(error.message));
+  });
+  electronAPI.onCopyChatTranscript?.(() => {
+    copyTextToClipboard(getChatTranscript(), "Chat transcript").catch((error) => addErrorMessage(error.message));
+  });
+  electronAPI.onProcessClipboardText?.(({ text } = {}) => {
+    const prompt = String(text || "").trim();
+    if (!prompt) {
+      addErrorMessage("Clipboard is empty. Copy a prompt first, then press Ctrl+Alt+Shift+V.");
+      return;
+    }
+    handleTestResponse(prompt);
+  });
 
   // Handle dark mode toggle
   electronAPI.onToggleDarkMode(() => {
@@ -502,7 +587,6 @@ async function startRecording(type, reason) {
 
     if (
       type === "input" &&
-      !settings.autoDetectInput &&
       settings.inputDeviceId &&
       settings.inputDeviceId !== "default"
     ) {
@@ -527,7 +611,15 @@ async function startRecording(type, reason) {
       constraints,
       startConfig,
       type,
-      (text, isFinal) => {
+      (text, isFinal, transcriptType, details) => {
+        if (details?.error) {
+          debugLog(`${sourceLabel} transcription returned no text`, {
+            type: transcriptType || type,
+            message: details.error,
+          });
+          addErrorMessage(`${sourceLabel} transcription: ${details.error}`);
+          return;
+        }
         if (isFinal) {
           debugLog(`${sourceLabel} transcript received`, { length: text?.length || 0 });
           addTranscriptionToChat(sourceLabel, text);
@@ -675,6 +767,49 @@ async function addTranscriptionToChat(source, text) {
   scheduleTranscriptionFlush(source);
 }
 
+function getLastAIOutput() {
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.type === "assistant" && message.status === "completed" && message.content?.trim());
+  if (lastAssistantMessage?.content?.trim()) return lastAssistantMessage.content.trim();
+
+  const renderedOutputs = chatHistory.querySelectorAll(".message.assistant[data-message-id] .message-content");
+  return renderedOutputs.length
+    ? renderedOutputs[renderedOutputs.length - 1].textContent.trim()
+    : "";
+}
+
+function getPreviousAssistantResponseHistory() {
+  return messages
+    .filter((message) => message.type === "assistant" && message.status === "completed" && message.content?.trim())
+    .map((message) => ({ role: "assistant", content: message.content.trim() }));
+}
+
+function getChatTranscript() {
+  const entries = messages.flatMap((message) => {
+    if (message.type === "user" && message.content?.trim()) return [`User: ${message.content.trim()}`];
+    if (message.type === "assistant" && message.status === "completed" && message.content?.trim()) {
+      return [`AI: ${message.content.trim()}`];
+    }
+    return [];
+  });
+  for (const [source, state] of Object.entries(liveTranscription)) {
+    if (state.text?.trim()) entries.push(`${source} transcript: ${state.text.trim()}`);
+  }
+  if (entries.length) return entries.join("\n\n");
+
+  return [...chatHistory.querySelectorAll(".message")]
+    .map((message) => message.textContent.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+async function copyTextToClipboard(text, label) {
+  const result = await getElectronAPI().copyTextToClipboard(text);
+  if (!result?.success) throw new Error(result?.error || "Unable to copy text.");
+  addAssistantInfoMessage(`${label} copied to clipboard.`);
+}
+
 // Handle keyboard shortcuts
 function handleKeyboardShortcuts(event) {
   if (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA") {
@@ -728,6 +863,16 @@ function updateMessage(data) {
     console.log("Creating new message element");
     messageEl = createMessageElement(messageId);
     chatHistory.appendChild(messageEl);
+    if (!messages.some((message) => message.messageId === messageId)) {
+      messages.push({
+        type: "assistant",
+        timestamp: Date.now(),
+        messageId,
+        content: "",
+        status: "pending",
+      });
+      scheduleConversationSave();
+    }
     // Show typing indicator for new messages
     typingIndicator.classList.add("visible");
     console.log("Typing indicator shown");
@@ -752,6 +897,7 @@ function updateMessage(data) {
     if (messageIndex !== -1) {
       messages[messageIndex].content = content;
       messages[messageIndex].status = "completed";
+      scheduleConversationSave();
     }
   }
 }
@@ -797,6 +943,7 @@ function showPreviewExampleOutput(payload = {}) {
     content: prompt,
   };
   messages.push(userMessage);
+  scheduleConversationSave();
 
   const userMessageEl = document.createElement("div");
   userMessageEl.className = "message user";
@@ -812,8 +959,12 @@ function showPreviewExampleOutput(payload = {}) {
     status: "completed",
   };
   messages.push(assistantMessage);
+  scheduleConversationSave();
 
   const assistantMessageEl = createMessageElement(messageId);
+  if (payload.previewMode === "horizontal") {
+    assistantMessageEl.classList.add("preview-horizontal-scroll");
+  }
   chatHistory.appendChild(assistantMessageEl);
 
   const contentWrapper = assistantMessageEl.querySelector(".message-content");
@@ -844,6 +995,7 @@ async function addScreenshotToChat(data) {
   };
 
   messages.push(message);
+  scheduleConversationSave();
 
   const messageEl = document.createElement("div");
   messageEl.className = "message user";
@@ -888,6 +1040,7 @@ async function addScreenshotToChat(data) {
       content: "",
       status: "pending",
     });
+    scheduleConversationSave();
   } catch (error) {
     typingIndicator.classList.remove("visible");
     addErrorMessage(error.message);
@@ -896,6 +1049,8 @@ async function addScreenshotToChat(data) {
 
 // Reset chat
 function resetChat() {
+  scheduleConversationSave();
+  activeConversationId = null;
   chatHistory.innerHTML = "";
   messages = [];
   finalizeLiveTranscription("Input");
@@ -1140,6 +1295,7 @@ async function handleTestResponse(prompt) {
       content: prompt,
     };
     messages.push(userMessage);
+    scheduleConversationSave();
 
     const userMessageEl = document.createElement("div");
     userMessageEl.className = "message user";
@@ -1160,12 +1316,13 @@ async function handleTestResponse(prompt) {
       status: "pending",
     };
     messages.push(assistantMessage);
+    scheduleConversationSave();
 
     const assistantMessageEl = createMessageElement(messageId);
     chatHistory.appendChild(assistantMessageEl);
     scrollToBottom();
 
-    const result = await window.electronAPI.testResponse(prompt);
+    const result = await window.electronAPI.testResponse(prompt, getPreviousAssistantResponseHistory());
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -1177,7 +1334,9 @@ async function handleTestResponse(prompt) {
       assistantMessageEl.classList.remove("loading");
       scrollToBottom();
     }
+    assistantMessage.content = result.content;
     assistantMessage.status = "completed";
+    scheduleConversationSave();
 
     // Hide typing indicator
     typingIndicator.classList.remove("visible");

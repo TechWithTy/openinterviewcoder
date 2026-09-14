@@ -4,6 +4,270 @@ const fs = require("fs");
 const config = require("./config");
 
 const DEFAULT_ANALYSIS_PROMPT = "Analyze this screenshot and provide insights.";
+const MERMAID_GUIDANCE = `
+
+--- Diagram Guidance ---
+When a diagram would materially clarify architecture, sequence, state, relationships, a workflow, or a timeline, include one concise Mermaid diagram in a fenced \`\`\`mermaid block. Choose the most suitable Mermaid chart type (for example flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, gantt, pie, journey, gitGraph, or mindmap). Do not add a diagram when concise prose or code is clearer, and never invent facts solely to fill a diagram.
+
+Mermaid must be valid for Mermaid 9.4. Use only simple, supported syntax: ASCII node IDs, short plain-text labels, and standard arrows. For an architecture diagram, prefer this safe shape:
+\`\`\`mermaid
+flowchart LR
+  Client[Client] --> API[API service]
+  API --> DB[(Database)]
+\`\`\`
+Do not use Markdown, code fences, HTML, template placeholders, unsupported diagram types, or unverified facts inside the Mermaid definition.`;
+const SYSTEM_DESIGN_MERMAID_REQUIREMENT = `
+
+--- System Design Diagram Requirement ---
+For every system-design response that proposes, revises, explains, or deepens a design, you MUST include exactly one valid Mermaid diagram in a fenced \`\`\`mermaid block. Use flowchart for high-level architecture, sequenceDiagram for request or event flow, erDiagram for data relationships, and stateDiagram-v2 for state transitions. The only exception is a response limited exclusively to clarifying questions. The diagram must match the stated design and be concise.`;
+const HIRING_MANAGER_MERMAID_REQUIREMENT = `
+
+--- Technical Interview Diagram Requirement ---
+For a Hiring Manager response about a technical system, architecture, production ownership, incident, API, data flow, deployment, reliability, or scalability, you MUST include exactly one concise valid Mermaid diagram in a fenced \`\`\`mermaid block. Use the diagram to show the system or flow being described. Do not add one for a purely behavioral, motivation, retention, or career-transition question.`;
+const CODE_IMPLEMENTATION_REQUIREMENT = `
+
+--- Code-First Implementation Requirement ---
+This is an implementation request. Code is required: never replace it with a diagram, generic plan, or documentation recommendation.
+
+For a live-editor request, return the smallest runnable vertical slice first, using the live-coding response format. Include exact code rather than pseudocode, ellipses, omitted functions, or placeholders. Ask no more than three clarifying questions, and only when an answer would materially change the behavior, contract, or data model; otherwise state the assumption briefly and begin coding. Include meaningful edge cases and a focused test or validation command when the interviewer requests testing or when it fits the current slice. Only provide a complete multi-file solution when the interviewer explicitly requests it. Include exactly one concise, valid Mermaid 9.4 diagram after the code to explain the current architecture or request flow; the diagram must support the code and never replace it.`;
+const LIVE_CODING_SYSTEM_PROMPT = `You are a real-time software-engineering interview copilot in LIVE CODING MODE.
+
+LIVE CODING MODE overrides every generic response format. When asked to build, implement, modify, debug, create an endpoint, use a framework, or work in an editor, output ONLY:
+## SAY THIS
+1-3 brief sentences the candidate can say.
+## APPROACH
+2-4 concise bullets covering the stated requirements, assumptions, first vertical slice, and the key tradeoff. This is an interview-ready decision summary, not hidden chain-of-thought.
+## TYPE THIS
+The exact next code to type in a fenced code block for the requested language.
+## WHY
+1-3 short bullets.
+## EDGE CASES
+Only the meaningful cases covered by this step.
+## RUN THIS
+The next command only when applicable.
+## EXPECT
+The expected result.
+## DIAGRAM
+Exactly one concise valid Mermaid 9.4 flowchart in a fenced \`\`\`mermaid block, placed after the code. Use only ASCII node IDs and labels made from letters, numbers, and spaces. Do not use punctuation, parentheses, ampersands, quotes, slashes, HTML, or Markdown inside labels.
+## CLARIFICATIONS TO ASK NEXT
+Up to three material questions to ask after the first working slice. If none are needed, state the assumptions used for this slice instead.
+## LIKELY FOLLOW UPS
+Two or three concise likely interviewer questions, each with the next implementation or reasoning direction.
+
+Start by making a reasonable, explicitly stated assumption and giving the concise approach summary before code; do not wait for clarification unless it is impossible to produce a correct first slice safely. Preserve the exact public contract named by the interviewer: do not rename requested functions, methods, fields, paths, or operations, and do not specialize a general data structure into an unrelated domain such as images. Add code comments only for non-obvious choices, invariants, concurrency boundaries, or framework behavior; do not clutter the code with narration. If tests are requested, TYPE THIS must include at least one actual Go \`func Test...\` in a clearly labeled \`_test.go\` code block. A \`main\` function, sleep, curl command, or manual demonstration never substitutes for the requested test. When background cleanup or timers are used, make lifecycle ownership explicit with Stop or Close and avoid one long-lived goroutine per entry unless the interviewer specifically chooses that tradeoff. Stop after the smallest useful vertical implementation step unless the interviewer explicitly requests the complete solution. If a test is requested, include one focused test in this step when practical; otherwise make the next command validate the behavior and explicitly state the next test to add. Always include the concise Mermaid diagram after the implementation, then clarifications and likely follow-ups. Do NOT output Quick Summary, Key Points, Suggested Actions, Technical Notes, generic architecture overviews, study/documentation recommendations, humor, jokes, novelty text, or long introductions.
+
+Go source file contract: every complete Go source file MUST begin with its correct \`package <name>\` declaration before imports. If the interviewer names a package, use it exactly; otherwise use \`package main\` only for an executable and a matching library package for library code. A requested test file uses the matching package unless an external \`_test\` package is explicitly requested. Before responding, verify the requested package, type names, public functions, method signatures, and test-file requirements against the interviewer request.
+
+Explicit interviewer instructions are non-negotiable. Obey constraints in this order: explicit interviewer instructions; explicit framework/library; explicit language; functional requirements; testing; production quality; job preferences; general best practices. Never replace a requested framework with another implementation. Gin, Echo, Fiber, Chi, and other Go libraries are allowed when explicitly requested or when a framework choice is appropriate to the stated task; state the reason for the choice briefly. Preserve the interviewer-provided domain names, endpoint paths, fields, and constraints exactly; never invent a different domain, field, API, sample value, or humorous behavior. If the transcript does not establish a stable implementation task or framework name, ask the candidate to repeat the one missing detail rather than writing unrelated code. For a framework request, import it and use its idiomatic routing, typed models, validation, and generated documentation/schema features where applicable. If a framework name is incomplete or uncertain after transcription, ask one concise clarification question instead of guessing or substituting a framework.`;
+const PRACTICAL_GO_TECHNICAL_SCREEN_REQUIREMENT = `
+
+--- Practical Go Technical Screen Focus ---
+This is a 60-minute practical backend live-coding screen in Go, not a LeetCode or full system-design interview. The interviewer is validating hands-on Go depth through how the candidate works.
+- Start with the smallest useful vertical slice and make the code runnable before expanding it.
+- Make idiomatic Go visible: clear package and function boundaries, straightforward control flow, explicit errors, useful request validation, realistic HTTP behavior when applicable, and small interfaces only when a seam is genuinely useful.
+- Call out the meaningful happy path, invalid input, missing resource, duplicate/idempotency, concurrent-access, and dependency-failure cases only when they apply. Implement or validate the highest-risk cases rather than merely listing them.
+- For mutable in-memory state, make the ownership and synchronization explicit; use a mutex or another simple correct primitive, and use race-aware testing when concurrency matters.
+- Add a focused Go test or validation step early. Prefer table-driven tests, httptest, and go test -race when relevant; do not invent a test framework requirement.
+- Explain the immediate tradeoff in one concise sentence: what you chose, why it is sufficient now, and what you would change at production scale.
+- Ask at most three high-value clarification questions only when the answer changes API behavior, persistence, consistency, or an edge case. Otherwise state the assumption and continue coding.
+Your output must demonstrate practical implementation, testing/validation, edge-case judgment, and concise verbal reasoning.`;
+const HUMA_V2_VERIFIED_PATTERNS = `
+
+--- Verified Huma v2 Patterns ---
+For Huma v2, use documented patterns only:
+- Register operations with huma.Register(api, huma.Operation{Method: http.MethodPost, Path: "/alerts", ...}, func(ctx context.Context, input *Input) (*Output, error) { ... }) or convenience helpers such as huma.Post(api, "/alerts", func(ctx context.Context, input *Input) (*Output, error) { ... }).
+- Inputs and outputs are typed structs; use their Body fields and validation tags so Huma generates OpenAPI and JSON Schema.
+- For framework tests, prefer router, api := humatest.New(t), register the same routes, then use api.Get/Post/etc. and inspect the returned httptest.ResponseRecorder.
+- Do NOT invent huma.New, chained api.POST().Doc().Produces(), huma.ReadJSON, huma.PathValue, api.Handler(), or api.ListenAndServe() APIs.
+`;
+
+function isCodeImplementationRequest(prompt, configuredPrompt = "") {
+  const text = String(prompt || "");
+  const hasImplementationVerb = /\b(build|implement|write|create|code|coding|develop|add|modify|debug)\b/i.test(text);
+  const hasBackendSignal = /\b(go|golang|huma|rest\s+api|http\s+(api|service)|endpoint|server|handler|route|test)\b/i.test(text);
+  if (hasImplementationVerb && hasBackendSignal) return true;
+
+  // Speech-to-text can drop framework names such as "Go" or "Huma". In the
+  // dedicated practical Go screen, preserve live-coding mode for an explicit
+  // spoken coding/API request instead of falling back to generic summaries.
+  return isGoBackendCopilotV2(configuredPrompt) &&
+    /\b(start|continue|begin)\s+(?:with\s+)?coding\b/i.test(text) &&
+    /\b(api|endpoint|handler|test|store|request)\b/i.test(text);
+}
+
+function isGoBackendCopilotV2(configuredPrompt) {
+  return /<prompt-profile>\s*go-backend-copilot-v2\s*<\/prompt-profile>/i.test(
+    String(configuredPrompt || "")
+  );
+}
+
+function buildLiveCodingSystemPrompt(userPrompt, configuredPrompt = config.getPrompt()) {
+  const isHumaV2 = isHumaV2Request(userPrompt);
+  return `${LIVE_CODING_SYSTEM_PROMPT}${
+    isGoBackendCopilotV2(configuredPrompt) ? PRACTICAL_GO_TECHNICAL_SCREEN_REQUIREMENT : ""
+  }${isHumaV2 ? HUMA_V2_VERIFIED_PATTERNS : ""}`;
+}
+
+function isHumaV2Request(prompt) {
+  const text = String(prompt || "");
+  return /\bhuma\b/i.test(text) ||
+    /\b(?:human|humer|hummer)\s*(?:version\s*|v\s*)?(?:2|two)\b/i.test(text);
+}
+
+function normalizeTechnicalTranscription(text) {
+  return String(text || "").replace(
+    /\b(?:huma|human|humer|hummer)\s*(?:version\s*|v\s*)?(?:2|two)\b/gi,
+    "Huma v2"
+  );
+}
+
+function isLowSignalTranscription(text) {
+  return /^(?:yes|yeah|yep|ok|okay|sounds good|got it|sure|thanks|thank you|lets move on)[.! ]*$/i.test(
+    String(text || "").trim()
+  );
+}
+
+function getDirectRequestText(prompt) {
+  const transcriptMatch = String(prompt || "").match(
+    /Transcript:\s*"([\s\S]*?)"\s*\n\s*Instructions:/i
+  );
+  return transcriptMatch ? transcriptMatch[1] : String(prompt || "");
+}
+
+function extractRequiredGoSymbols(prompt) {
+  const request = getDirectRequestText(prompt);
+  const symbols = new Set();
+  const signatures = request.match(/\b[A-Z][A-Za-z0-9_]*\s*\(/g) || [];
+  signatures.forEach((signature) => symbols.add(signature.replace(/\s*\($/, "")));
+  return [...symbols];
+}
+
+function extractRequiredGoPackage(prompt) {
+  const request = getDirectRequestText(prompt);
+  const match = request.match(/\bpackage\s+(?:named\s+)?`?([a-z][a-z0-9_]*)`?/i);
+  return match ? match[1] : "";
+}
+
+function extractRequiredGoSignatures(prompt) {
+  const request = getDirectRequestText(prompt);
+  const codeTerms = request.match(/`[^`]+`/g) || [];
+  return codeTerms
+    .map((term) => term.slice(1, -1).replace(/\s+/g, " ").trim())
+    .filter((term) => /^[A-Z][A-Za-z0-9_]*\s*\(/.test(term));
+}
+
+function extractRequiredGoTypes(prompt) {
+  const request = getDirectRequestText(prompt);
+  return [...request.matchAll(/\btype\s+`?([A-Z][A-Za-z0-9_]*)`?/g)]
+    .map((match) => match[1]);
+}
+
+function extractRequiredGoFiles(prompt) {
+  const request = getDirectRequestText(prompt);
+  return [...new Set((request.match(/\b[A-Za-z0-9_-]+(?:_test)?\.go\b/g) || []))];
+}
+
+function levenshteinDistance(left, right) {
+  const source = String(left || "");
+  const target = String(right || "");
+  const previous = Array.from({ length: target.length + 1 }, (_, index) => index);
+
+  for (let sourceIndex = 1; sourceIndex <= source.length; sourceIndex += 1) {
+    let diagonal = previous[0];
+    previous[0] = sourceIndex;
+    for (let targetIndex = 1; targetIndex <= target.length; targetIndex += 1) {
+      const saved = previous[targetIndex];
+      previous[targetIndex] = Math.min(
+        previous[targetIndex] + 1,
+        previous[targetIndex - 1] + 1,
+        diagonal + (source[sourceIndex - 1] === target[targetIndex - 1] ? 0 : 1)
+      );
+      diagonal = saved;
+    }
+  }
+  return previous[target.length];
+}
+
+function correctNearMissedRequiredGoSymbols(content, prompt) {
+  let corrected = String(content || "");
+
+  // This is a recurrent model typo in constructor names. It is never a valid
+  // spelling in the Go API we want the candidate to type, so fix it even when
+  // transcription omitted the explicit NewProcessor contract.
+  corrected = corrected.replace(/\bNewProceassor\b/g, "NewProcessor");
+
+  const requiredSymbols = extractRequiredGoSymbols(prompt);
+  const candidateSymbols = [...new Set(corrected.match(/\b[A-Z][A-Za-z0-9_]*\b/g) || [])];
+
+  requiredSymbols.forEach((requiredSymbol) => {
+    if (new RegExp(`\\b${requiredSymbol}\\s*\\(`).test(corrected)) return;
+    const nearMatch = candidateSymbols.find((candidate) =>
+      candidate !== requiredSymbol &&
+      levenshteinDistance(candidate, requiredSymbol) <= 2
+    );
+    if (nearMatch) {
+      corrected = corrected.replace(new RegExp(`\\b${nearMatch}\\b`, "g"), requiredSymbol);
+    }
+  });
+
+  return corrected;
+}
+
+function getLiveCodingOutputViolations(content, prompt) {
+  const response = String(content || "");
+  const request = getDirectRequestText(prompt);
+  const violations = [];
+  const requiredSymbols = extractRequiredGoSymbols(request);
+  const requiredPackage = extractRequiredGoPackage(request);
+  const requiredSignatures = extractRequiredGoSignatures(request);
+  const requiredTypes = extractRequiredGoTypes(request);
+  const requiredFiles = extractRequiredGoFiles(request);
+
+  if (requiredPackage && !new RegExp(`^\\s*package\\s+${requiredPackage}\\b`, "m").test(response)) {
+    violations.push(`missing required Go package declaration package ${requiredPackage}`);
+  }
+
+  requiredSymbols.forEach((symbol) => {
+    if (!new RegExp(`\\b${symbol}\\s*\\(`).test(response)) {
+      violations.push(`missing required public Go API ${symbol}`);
+    }
+  });
+  requiredSignatures.forEach((signature) => {
+    const normalizedResponse = response.replace(/\s+/g, " ");
+    if (!normalizedResponse.includes(signature)) {
+      violations.push(`missing required Go signature ${signature}`);
+    }
+  });
+  requiredTypes.forEach((typeName) => {
+    if (!new RegExp(`\\btype\\s+${typeName}\\s+(?:struct|interface)\\b`).test(response)) {
+      violations.push(`missing required Go type ${typeName}`);
+    }
+  });
+  requiredFiles.forEach((fileName) => {
+    if (!response.includes(fileName)) {
+      violations.push(`missing required Go file ${fileName}`);
+    }
+  });
+  if (/\b(test|tests|testing)\b/i.test(request) &&
+      (!/func\s+Test[A-Za-z0-9_]*/.test(response) || !/_test\.go/.test(response))) {
+    violations.push("missing requested Go test file and func Test");
+  }
+  if (/\bconcurrent(?:ly)?\s+(?:calls?|processing|process)/i.test(request) &&
+      !/func\s+Test[A-Za-z0-9_]*Concurrent/i.test(response)) {
+    violations.push("missing requested concurrent-processing Go test");
+  }
+  if (/\bdo not use http\b/i.test(request) && /(?:net\/http|gin-gonic|\bgin\.)/.test(response)) {
+    violations.push("used HTTP or a framework despite the no-HTTP requirement");
+  }
+  if (isHumaV2Request(request) &&
+      (!/github\.com\/danielgtaylor\/huma\/v2/.test(response) || !/huma\.(?:Register|Post|Get)\s*\(/.test(response))) {
+    violations.push("did not use the requested Huma v2 API");
+  }
+  if (/\b(?:humor|humorous|joke|laugh)\b/i.test(response)) {
+    violations.push("included prohibited humor");
+  }
+  return violations;
+}
 
 // System prompt for the AI assistant
 const SYSTEM_PROMPT = `You are an invisible AI assistant that analyzes screenshots during meetings and presentations.
@@ -29,27 +293,166 @@ Format your responses in sections:
 • Suggested Actions (if applicable)
 • Technical Notes (if code/data is present)`;
 
+const TRELLIS_CLARIFYING_QUESTIONS_GATE = `
+
+--- Trellis System Design Clarifying-Questions Gate ---
+The interviewer explicitly asked to start with clarifying questions. This is a requirements-gathering turn, not a design-answer turn.
+Return ONLY this exact structure:
+## CLARIFYING QUESTIONS
+1. [question]
+2. [question]
+3. [question]
+4. [optional question]
+5. [optional question]
+
+Ask 3-5 concrete questions whose answers materially affect customer flows, roles and permissions, volume and latency, underwriting integrations, consistency and idempotency, data retention, privacy/security, or launch scope. Do NOT provide assumptions, an architecture, entities, APIs, implementation steps, Mermaid, a conclusion, likely follow-ups, or any answer beyond those questions. Wait for the interviewer answers before designing.`;
+
 let isInitialized = false;
+
+async function getOrganizationUsage() {
+  const adminKey = config.getOpenAIAdminKey();
+  if (!adminKey) return { success: false, error: "OpenAI admin key is not configured." };
+  const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+  const now = new Date();
+  const monthStartTime = Math.floor(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000);
+  const headers = {
+    Authorization: `Bearer ${adminKey}`,
+    "Content-Type": "application/json",
+  };
+  try {
+    const [completionResponse, audioResponse, costResponse, spendLimitResponse, monthCostResponse] = await Promise.all([
+      fetch(`https://api.openai.com/v1/organization/usage/completions?start_time=${startTime}&bucket_width=1d&limit=31`, { headers }),
+      fetch(`https://api.openai.com/v1/organization/usage/audio_transcriptions?start_time=${startTime}&bucket_width=1d&limit=31`, { headers }),
+      fetch(`https://api.openai.com/v1/organization/costs?start_time=${startTime}&limit=31`, { headers }),
+      fetch("https://api.openai.com/v1/organization/spend_limit", { headers }),
+      fetch(`https://api.openai.com/v1/organization/costs?start_time=${monthStartTime}&limit=31`, { headers }),
+    ]);
+    const readResponse = async (response, label) => {
+      if (response.ok) return { data: await response.json(), error: "" };
+      const body = await response.text();
+      let message = "";
+      try {
+        message = JSON.parse(body)?.error?.message || "";
+      } catch (_) {
+        message = body;
+      }
+      if (response.status === 401) {
+        return {
+          data: null,
+          error: "OpenAI rejected OPEN_API_ADMIN_KEY. Create a valid read-only Organization Admin key (sk-admin-...) and replace the current value, then restart the app.",
+        };
+      }
+      if (response.status === 403) {
+        return {
+          data: null,
+          error: `${label}: OPEN_API_ADMIN_KEY is recognized but is not authorized for this organization resource.`,
+        };
+      }
+      if (response.status === 404 && label === "Spend-limit request failed") {
+        return {
+          data: null,
+          error: "No organization hard spend limit is configured in OpenAI.",
+        };
+      }
+      return { data: null, error: `${label} (${response.status}): ${message || "Unknown API error"}` };
+    };
+    const [completion, audioUsage, costsUsage, spendLimit, monthCosts] = await Promise.all([
+      readResponse(completionResponse, "AI usage request failed"),
+      readResponse(audioResponse, "Transcription usage request failed"),
+      readResponse(costResponse, "Costs request failed"),
+      readResponse(spendLimitResponse, "Spend-limit request failed"),
+      readResponse(monthCostResponse, "Current-month costs request failed"),
+    ]);
+    const sumResults = (payload, fields) => (payload.data || []).reduce(
+      (total, bucket) => total + (bucket.results || []).reduce(
+        (bucketTotal, result) => bucketTotal + fields.reduce((value, field) => value + (Number(result[field]) || 0), 0),
+        0
+      ),
+      0
+    );
+    const sumCosts = (payload) => (payload?.data || []).reduce(
+      (total, bucket) => total + (bucket.results || []).reduce(
+        (bucketTotal, result) => bucketTotal + (Number(result.amount?.value) || 0), 0),
+      0
+    );
+    const hardLimitUsd = spendLimit.data ? Number(spendLimit.data.threshold_amount) / 100 : null;
+    const currentMonthCostsUsd = monthCosts.data ? sumCosts(monthCosts.data) : null;
+    const remainingMonthlySpendUsd = hardLimitUsd !== null && currentMonthCostsUsd !== null
+      ? Math.max(0, hardLimitUsd - currentMonthCostsUsd)
+      : null;
+    const errors = [...new Set([completion.error, audioUsage.error, costsUsage.error, monthCosts.error].filter(Boolean))];
+    return {
+      success: completion.data !== null || audioUsage.data !== null || costsUsage.data !== null,
+      aiTokensUsed: completion.data ? sumResults(completion.data, ["input_tokens", "output_tokens"]) : null,
+      transcriptionSecondsUsed: audioUsage.data ? sumResults(audioUsage.data, ["seconds", "audio_seconds", "num_seconds"]) : null,
+      costsUsd: costsUsage.data ? sumCosts(costsUsage.data) : null,
+      currentMonthCostsUsd,
+      hardLimitUsd,
+      remainingMonthlySpendUsd,
+      hardLimitEnforced: spendLimit.data?.enforcement?.status === "enforcing",
+      spendLimitError: spendLimit.error,
+      source: "OpenAI organization usage (last 30 days)",
+      error: errors.join(" | "),
+    };
+  } catch (error) {
+    return { success: false, error: `OpenAI usage request failed: ${error.message}` };
+  }
+}
 
 function buildTaskPrompt(userPrompt, configuredPrompt = config.getPrompt()) {
   const normalizedUserPrompt = String(userPrompt || "").trim();
   const normalizedConfiguredPrompt = String(configuredPrompt || "").trim();
 
-  if (!normalizedUserPrompt) {
-    return normalizedConfiguredPrompt || DEFAULT_ANALYSIS_PROMPT;
-  }
-
-  if (
-    !normalizedConfiguredPrompt ||
-    normalizedConfiguredPrompt === DEFAULT_ANALYSIS_PROMPT
-  ) {
-    return normalizedUserPrompt;
-  }
-
-  return `${normalizedConfiguredPrompt}
+  const basePrompt = !normalizedUserPrompt
+    ? normalizedConfiguredPrompt || DEFAULT_ANALYSIS_PROMPT
+    : !normalizedConfiguredPrompt || normalizedConfiguredPrompt === DEFAULT_ANALYSIS_PROMPT
+      ? normalizedUserPrompt
+      : `${normalizedConfiguredPrompt}
 
 --- User Request ---
 ${normalizedUserPrompt}`;
+  // Uploaded interview documents are useful context for every selected prompt,
+  // including coding, system design, and hiring-manager modes.
+  const interviewContext = buildInterviewDocumentContext();
+  const isSystemDesignPrompt = /Real-Time System Design Interview Copilot/i.test(
+    normalizedConfiguredPrompt
+  );
+  const isHiringManagerPrompt = /Real-Time Software Engineering Interview Copilot|GoodRx Backend Software Engineer interview|Real-Time Go Backend Interview Copilot/i.test(
+    normalizedConfiguredPrompt
+  );
+  const requiresCode = isCodeImplementationRequest(normalizedUserPrompt, normalizedConfiguredPrompt);
+  const requiresHumaV2 = requiresCode && isHumaV2Request(normalizedUserPrompt);
+  const isGoV2 = isGoBackendCopilotV2(normalizedConfiguredPrompt);
+  const isTrellisFullStackV2 = /<prompt-profile>\s*trellis-fullstack-copilot-v2\s*<\/prompt-profile>/i.test(normalizedConfiguredPrompt);
+  const asksForClarifyingQuestions = /\b(?:start|begin)\b[^.!?\n]{0,100}\b(?:clarifying|questions?)\b|\bclarifying questions?\b/i.test(normalizedUserPrompt);
+  const isTrellisClarifyingSystemDesignRequest = isTrellisFullStackV2 &&
+    /\bdesign\b/i.test(normalizedUserPrompt) && asksForClarifyingQuestions;
+  return `${basePrompt}${interviewContext}${requiresCode ? "" : MERMAID_GUIDANCE}${
+    !requiresCode && isSystemDesignPrompt ? SYSTEM_DESIGN_MERMAID_REQUIREMENT : ""
+  }${!requiresCode && isHiringManagerPrompt ? HIRING_MANAGER_MERMAID_REQUIREMENT : ""}${
+    requiresCode ? CODE_IMPLEMENTATION_REQUIREMENT : ""
+  }${isGoV2 && requiresCode ? PRACTICAL_GO_TECHNICAL_SCREEN_REQUIREMENT : ""}${
+    requiresHumaV2 ? HUMA_V2_VERIFIED_PATTERNS : ""
+  }${isTrellisClarifyingSystemDesignRequest ? TRELLIS_CLARIFYING_QUESTIONS_GATE : ""}`;
+}
+
+function buildInterviewDocumentContext() {
+  const resume = config.getResumeDocument();
+  const jobDescription = config.getJobDescriptionDocument();
+  const resolvedSections = [];
+  if (resume.text) {
+    resolvedSections.push(`RESOLVED {{candidate_resume}} — ${resume.name || "uploaded resume"}:\n${resume.text}`);
+  }
+  if (jobDescription.text) {
+    resolvedSections.push(`RESOLVED {{job_description}} — ${jobDescription.name || "uploaded job description"}:\n${jobDescription.text}`);
+  }
+  if (resolvedSections.length) {
+    return `\n\n--- Resolved Interview Materials: Required Factual Context ---\nUse these documents before answering. When the question calls for personal experience and the material supports it, ground the answer in at least one specific verified employer, project, technology, responsibility, or metric from this context. Do not force a detail that is irrelevant, and never invent one.\n\n${resolvedSections.join("\n\n")}`;
+  }
+  const sections = [];
+  if (resume.text) sections.push(`RÉSUMÉ (${resume.name || "uploaded résumé"}):\n${resume.text}`);
+  if (jobDescription.text) sections.push(`JOB DESCRIPTION (${jobDescription.name || "uploaded job description"}):\n${jobDescription.text}`);
+  return sections.length ? `\n\n--- Interview Materials (use as factual context) ---\n${sections.join("\n\n")}` : "";
 }
 
 function buildTranscriptionPrompt(source, text) {
@@ -67,6 +470,20 @@ Instructions:
 - Correct obvious speech-to-text errors in technical terms before answering.
 - For collaborative document editors, if a phrase sounds like "ChatGPT engine", interpret it as "Operational Transformation engine" unless the user explicitly asks about ChatGPT.
 - Do not mention ChatGPT, OpenAI, or AI model internals unless explicitly requested.`;
+}
+
+function buildPreviousResponseContext(history) {
+  const responses = Array.isArray(history)
+    ? history
+      .filter((entry) => entry?.role === "assistant" && typeof entry.content === "string" && entry.content.trim())
+      .slice(-6)
+      .map((entry) => entry.content.trim())
+    : [];
+  if (!responses.length) return "";
+
+  const joined = responses.join("\n\n--- Previous AI response ---\n\n");
+  const bounded = joined.length > 12000 ? joined.slice(-12000) : joined;
+  return `\n\n--- Previous AI Responses: Context Only ---\nUse these only to maintain continuity. The current interviewer request and supplied interview materials have higher authority. Do not repeat prior content unless the new request asks for it.\n\n${bounded}`;
 }
 
 function shouldPrioritizeLeftPane(prompt) {
@@ -142,7 +559,7 @@ function mimeTypeToFilename(mimeType) {
   return "chunk.webm";
 }
 
-async function transcribeAudioChunk({ audioBase64, mimeType, type }) {
+async function transcribeAudioChunk({ audioBase64, mimeType, type, durationMs }) {
   const apiKey = config.getOpenAIKey();
   if (!audioBase64) {
     throw new Error("Missing audio payload");
@@ -200,24 +617,30 @@ async function initializeLLMService() {
       }
     });
 
-    ipcMain.handle("test-response", async (event, prompt) => {
+    ipcMain.handle("test-response", async (event, prompt, history) => {
       try {
         validateConfig();
-        return await makeLLMRequest(event, { prompt });
+        return await makeLLMRequest(event, { prompt, history });
       } catch (error) {
         console.error("LLM Test Error:", error);
         return { success: false, error: error.message };
       }
     });
 
-    ipcMain.handle("process-transcription", async (event, text) => {
+    ipcMain.handle("process-transcription", async (event, text, history) => {
       try {
         validateConfig();
         const match = String(text || "").match(/^Source:\s*([^,]+),\s*Text:\s*([\s\S]*)$/i);
         const source = match ? match[1].trim() : "Unknown";
-        const transcript = match ? match[2].trim() : String(text || "").trim();
+        const transcript = normalizeTechnicalTranscription(
+          match ? match[2].trim() : String(text || "").trim()
+        );
+        if (isLowSignalTranscription(transcript)) {
+          return { success: true, ignored: true };
+        }
         return await makeLLMRequest(event, { 
-          prompt: buildTranscriptionPrompt(source, transcript)
+          prompt: buildTranscriptionPrompt(source, transcript),
+          history,
         });
       } catch (error) {
         console.error("Transcription processing error:", error);
@@ -257,8 +680,17 @@ function validateConfig() {
 async function makeLLMRequest(event, data) {
   const apiKey = config.getOpenAIKey();
   const prompt = buildTaskPrompt(data.prompt);
-  let selectedModel = config.getModel() || "gpt-4o-mini";
-  let isOModel = selectedModel.startsWith("o1") || selectedModel.startsWith("o3");
+  const isLiveCodingRequest = isCodeImplementationRequest(data.prompt, config.getPrompt());
+  const activeSystemPrompt = isLiveCodingRequest
+    ? buildLiveCodingSystemPrompt(data.prompt)
+    : SYSTEM_PROMPT;
+  let selectedModel = config.getModel() || "gpt-5.6-terra";
+  const visionModel = config.getVisionModel() || "gpt-5.6-luna";
+  const usesMaxCompletionTokens = (model) => /^(?:gpt-5|o(?:1|3|4)(?:-|$))/.test(model);
+  const isReasoningVisionModel = /^o(?:1|3|4)(?:-|$)/.test(visionModel);
+  const visionUsesMaxCompletionTokens = usesMaxCompletionTokens(visionModel);
+  let isOModel = /^o(?:1|3|4)(?:-|$)/.test(selectedModel);
+  const selectedModelUsesMaxCompletionTokens = usesMaxCompletionTokens(selectedModel);
   const useTwoStep = config.getTwoStep();
 
   let base64Image = null;
@@ -347,18 +779,29 @@ async function makeLLMRequest(event, data) {
           Authorization: `Bearer ${apiKey}`,
         },
         data: {
-          model: "gpt-4o-mini", // fast, cheap vision
-          messages: [
-            {
-              role: "system",
-              content: `You are a specialized OCR and layout extraction assistant. ${extractionInstructions}`,
-            },
-            {
-              role: "user",
-              content: extractionContent
-            }
-          ],
-          max_tokens: 2000,
+          model: visionModel,
+          store: config.getStoreOpenAIConversations(),
+          messages: isReasoningVisionModel
+            ? [{
+                role: "user",
+                content: [{
+                  type: "text",
+                  text: `You are a specialized OCR and layout extraction assistant. ${extractionInstructions}`,
+                }, ...extractionContent],
+              }]
+            : [
+                {
+                  role: "system",
+                  content: `You are a specialized OCR and layout extraction assistant. ${extractionInstructions}`,
+                },
+                {
+                  role: "user",
+                  content: extractionContent,
+                },
+              ],
+          ...(visionUsesMaxCompletionTokens
+            ? { max_completion_tokens: 2000 }
+            : { max_tokens: 2000 }),
         },
       });
 
@@ -379,19 +822,22 @@ async function makeLLMRequest(event, data) {
       : prioritizeLeftPane
       ? "\n\nImportant image-handling instruction: prioritize the coding problem shown in the left pane/left half of the screenshot. Ignore the center or right pane unless it is needed to complete missing context."
       : "";
-  const finalPrompt = prompt + focusPrefix + extractedTextContext;
+  const previousResponseContext = config.getInjectPreviousResponses()
+    ? buildPreviousResponseContext(data.history)
+    : "";
+  const finalPrompt = prompt + focusPrefix + extractedTextContext + previousResponseContext;
 
   if (isOModel) {
     messages.push({
       role: "user",
       content: [
-        { type: "text", text: SYSTEM_PROMPT + "\n\n" + finalPrompt }
+        { type: "text", text: activeSystemPrompt + "\n\n" + finalPrompt }
       ]
     });
   } else {
     messages.push({
       role: "system",
-      content: SYSTEM_PROMPT
+      content: activeSystemPrompt
     });
     messages.push({
       role: "user",
@@ -445,7 +891,7 @@ async function makeLLMRequest(event, data) {
       messages = [
         {
           role: "system",
-          content: SYSTEM_PROMPT
+          content: activeSystemPrompt
         },
         {
           role: "user",
@@ -494,12 +940,13 @@ async function makeLLMRequest(event, data) {
   const requestData = {
     model: selectedModel,
     messages: messages,
+    store: config.getStoreOpenAIConversations(),
   };
 
-  if (isOModel) {
+  if (selectedModelUsesMaxCompletionTokens) {
     requestData.max_completion_tokens = 4000;
   } else {
-    requestData.max_tokens = 1000;
+    requestData.max_tokens = isLiveCodingRequest ? 4000 : 1000;
   }
   try {
     const response = await axios({
@@ -516,7 +963,65 @@ async function makeLLMRequest(event, data) {
       throw new Error("Empty response from OpenAI");
     }
 
-    const content = response.data.choices[0].message.content;
+    let content = isLiveCodingRequest
+      ? correctNearMissedRequiredGoSymbols(response.data.choices[0].message.content, data.prompt)
+      : response.data.choices[0].message.content;
+    const violations = isLiveCodingRequest
+      ? getLiveCodingOutputViolations(content, data.prompt)
+      : [];
+
+    if (violations.length > 0) {
+      const repairResponse = await axios({
+        method: "post",
+        url: "https://api.openai.com/v1/chat/completions",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        data: {
+          ...requestData,
+          messages: [
+            ...messages,
+            { role: "assistant", content },
+            {
+              role: "user",
+              content: `Repair the draft. It violated these hard requirements: ${violations.join("; ")}. Return the full corrected live-coding response only. Preserve the interviewer's exact requested public API and domain.`,
+            },
+          ],
+        },
+      });
+      const repairedContent = repairResponse.data?.choices?.[0]?.message?.content;
+      if (repairedContent) {
+        content = correctNearMissedRequiredGoSymbols(repairedContent, data.prompt);
+      }
+
+      const remainingViolations = getLiveCodingOutputViolations(content, data.prompt);
+      if (remainingViolations.length > 0) {
+        const finalRepairResponse = await axios({
+          method: "post",
+          url: "https://api.openai.com/v1/chat/completions",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          data: {
+            ...requestData,
+            messages: [
+              ...messages,
+              { role: "assistant", content },
+              {
+                role: "user",
+                content: `Your previous repair is still invalid: ${remainingViolations.join("; ")}. Return the entire corrected answer only. These are hard requirements, not suggestions: preserve the exact requested Go package, public type names, function and method names, and actual _test.go code with func Test when tests were requested.`,
+              },
+            ],
+          },
+        });
+        const finalRepairedContent = finalRepairResponse.data?.choices?.[0]?.message?.content;
+        if (finalRepairedContent) {
+          content = correctNearMissedRequiredGoSymbols(finalRepairedContent, data.prompt);
+        }
+      }
+    }
     const messageId = Date.now().toString();
 
     // Send the complete response back to renderer
@@ -532,7 +1037,7 @@ async function makeLLMRequest(event, data) {
       messageId,
       content, // Add content to result for test-response
       provider: "openai",
-      model: "gpt-4o-mini",
+      model: selectedModel,
       status: "completed",
     };
   } catch (error) {
@@ -560,10 +1065,35 @@ async function makeLLMRequest(event, data) {
 
 module.exports = {
   initializeLLMService,
+  getOrganizationUsage,
   __test__: {
     buildTaskPrompt,
     buildTranscriptionPrompt,
+    buildPreviousResponseContext,
     DEFAULT_ANALYSIS_PROMPT,
+    MERMAID_GUIDANCE,
+    SYSTEM_DESIGN_MERMAID_REQUIREMENT,
+    HIRING_MANAGER_MERMAID_REQUIREMENT,
+    CODE_IMPLEMENTATION_REQUIREMENT,
+    LIVE_CODING_SYSTEM_PROMPT,
+    HUMA_V2_VERIFIED_PATTERNS,
+    PRACTICAL_GO_TECHNICAL_SCREEN_REQUIREMENT,
+    TRELLIS_CLARIFYING_QUESTIONS_GATE,
+    isCodeImplementationRequest,
+    isGoBackendCopilotV2,
+    isHumaV2Request,
+    normalizeTechnicalTranscription,
+    isLowSignalTranscription,
+    getDirectRequestText,
+    extractRequiredGoSymbols,
+    extractRequiredGoPackage,
+    extractRequiredGoSignatures,
+    extractRequiredGoTypes,
+    extractRequiredGoFiles,
+    levenshteinDistance,
+    correctNearMissedRequiredGoSymbols,
+    getLiveCodingOutputViolations,
+    buildLiveCodingSystemPrompt,
   },
 };
 

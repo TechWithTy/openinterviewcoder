@@ -35,6 +35,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Save settings
   saveSettings: (settings) => ipcRenderer.invoke("save-settings", settings),
+  uploadInterviewDocument: (kind) => ipcRenderer.invoke("upload-interview-document", kind),
+  getOpenAIUsage: () => ipcRenderer.invoke("get-openai-usage"),
+  listConversations: () => ipcRenderer.invoke("list-conversations"),
+  getConversation: (id) => ipcRenderer.invoke("get-conversation", id),
+  saveConversation: (conversation) => ipcRenderer.invoke("save-conversation", conversation),
+  openConversation: (id) => ipcRenderer.invoke("open-conversation", id),
+  onOpenConversation: (callback) =>
+    ipcRenderer.on("open-conversation", (_, conversation) => callback(conversation)),
+  copyTextToClipboard: (text) => ipcRenderer.invoke("copy-text-to-clipboard", text),
 
   // Show settings window
   showSettings: () => ipcRenderer.invoke("show-settings"),
@@ -58,7 +67,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getRecentScreenshots: () => ipcRenderer.invoke("get-recent-screenshots"),
 
   // Test response
-  testResponse: (prompt) => ipcRenderer.invoke("test-response", prompt),
+  testResponse: (prompt, history) => ipcRenderer.invoke("test-response", prompt, history),
   previewExampleOutput: (payload) =>
     ipcRenderer.invoke("preview-example-output", payload),
   onPreviewExampleOutput: (callback) =>
@@ -70,6 +79,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Chat reset
   onResetChat: (callback) =>
     ipcRenderer.on("reset-chat", (event) => callback()),
+  onCopyLastAIOutput: (callback) =>
+    ipcRenderer.on("copy-last-ai-output", () => callback()),
+  onCopyChatTranscript: (callback) =>
+    ipcRenderer.on("copy-chat-transcript", () => callback()),
+  onProcessClipboardText: (callback) =>
+    ipcRenderer.on("process-clipboard-text", (event, payload) => callback(payload)),
 
   // Window position
   onWindowPositionChanged: (callback) =>
@@ -117,7 +132,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const transcriptionService = getTranscriptionService();
     return transcriptionService.stopTranscription(type);
   },
-  processTranscription: (text) => ipcRenderer.invoke("process-transcription", text),
+  processTranscription: (text, history) => ipcRenderer.invoke("process-transcription", text, history),
   transcribeAudioChunk: (payload) => ipcRenderer.invoke("transcribe-audio-chunk", payload),
 });
 

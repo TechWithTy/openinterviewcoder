@@ -172,16 +172,23 @@ body.dark-mode .message.assistant {
 }
 
 .message-content.raw-code {
-  white-space: pre;
+  white-space: pre-wrap;
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
+  overflow-wrap: anywhere;
   font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
   font-size: 13px;
   line-height: 1.45;
   background-color: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   padding: 16px;
+}
+
+.message.preview-horizontal-scroll .message-content.raw-code {
+  white-space: pre;
+  overflow-x: auto;
+  overflow-wrap: normal;
 }
 
 /* Animations */
