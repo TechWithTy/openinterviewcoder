@@ -228,10 +228,10 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      #codeReviewContextContainer[hidden] {
+      #codeReviewProjectContainer[hidden] {
         display: none;
       }
-      #codeReviewContext {
+      #additionalContext {
         min-height: 110px;
         resize: vertical;
       }
@@ -455,6 +455,8 @@
               <option value="goodrx-backend">GoodRx Backend Interview (Go/Kubernetes/AWS)</option>
               <option value="go-backend-copilot">Real-Time Go Backend Interview Copilot</option>
               <option value="go-backend-copilot-v2">Real-Time Go Backend Interview Copilot v2 (Coding + Big-O)</option>
+              <option value="gnar-live-coding">Gnar Senior/Staff Engineer Interview Copilot (Live Coding)</option>
+              <option value="gnar-cultural-fit">Gnar Senior Engineering Cultural-Fit Copilot</option>
             </select>
             <textarea
               id="analysisPrompt"
@@ -492,18 +494,24 @@
           </div>
         </div>
 
-        <div class="setting-item" id="codeReviewContextContainer" hidden>
-          <label class="setting-label" for="codeReviewContext">Take-home review context (optional)</label>
+        <div class="setting-item" id="additionalContextContainer">
+          <label class="setting-label" for="additionalContext">Additional context (optional)</label>
           <div class="setting-control">
             <textarea
-              id="codeReviewContext"
+              id="additionalContext"
               maxlength="60000"
-              placeholder="Paste the project architecture, assignment, tech stack, tradeoffs, expected questions, and screenshot instructions here."
+              placeholder="Add background, preferences, constraints, or instructions to use with any prompt template."
               rows="12"
             ></textarea>
             <div class="api-key-description">
-              This context is added only when Take-Home Review is selected. Long architecture briefs are supported; do not include secrets.
+              This context is added to every prompt template. Long context is supported; do not include secrets.
             </div>
+          </div>
+        </div>
+
+        <div class="setting-item" id="codeReviewProjectContainer" hidden>
+          <label class="setting-label">Take-home review project folder (optional)</label>
+          <div class="setting-control">
             <div class="template-preview-actions" style="margin-top: 10px;">
               <button type="button" id="selectCodeReviewProjectButton" class="preview-button">Select project folder</button>
               <button type="button" id="clearCodeReviewProjectButton" class="preview-button" disabled>Clear folder</button>

@@ -468,7 +468,7 @@ function setupEventListeners() {
   electronAPI.onOpenConversation?.(renderStoredConversation);
 
   // Handle chat reset
-  electronAPI.onResetChat(resetChat);
+  electronAPI.onResetChat(() => resetChat({ restartInput: true }));
   electronAPI.onCopyLastAIOutput?.(() => {
     copyTextToClipboard(getLastAIOutput(), "Latest AI response").catch((error) => addErrorMessage(error.message));
   });
@@ -576,7 +576,7 @@ function queueRecordingOperation(type, operation) {
   return control.opQueue;
 }
 
-async function startRecording(type, reason) {
+async function startRecording(type, reason, { showStatusMessage = true } = {}) {
   const electronAPI = getElectronAPI();
   const sourceLabel = getSourceLabel(type);
   try {
@@ -629,7 +629,9 @@ async function startRecording(type, reason) {
     await electronAPI.showWindow();
     setRecorderActive(type, true);
     debugLog(`${type} transcription started`, { reason });
-    addAssistantInfoMessage(`Started transcription for ${type}. Use menu again to stop.`);
+    if (showStatusMessage) {
+      addAssistantInfoMessage(`Started transcription for ${type}. Use menu again to stop.`);
+    }
   } catch (err) {
     const errorDetails = getErrorDetails(err);
     debugLog(`${sourceLabel} transcription failed`, {
@@ -643,7 +645,7 @@ async function startRecording(type, reason) {
   }
 }
 
-async function stopRecording(type, reason) {
+async function stopRecording(type, reason, { flushBuffer = true, showStatusMessage = true } = {}) {
   if (!isRecorderActive(type)) {
     return;
   }
@@ -652,9 +654,13 @@ async function stopRecording(type, reason) {
   electronAPI.stopTranscription(type);
   setRecorderActive(type, false);
   debugLog(`${type} transcription stop requested`, { reason });
-  await flushTranscriptionBuffer(sourceLabel);
+  if (flushBuffer) {
+    await flushTranscriptionBuffer(sourceLabel);
+  }
   finalizeLiveTranscription(sourceLabel);
-  addAssistantInfoMessage(`Stopped transcription for ${type}.`);
+  if (showStatusMessage) {
+    addAssistantInfoMessage(`Stopped transcription for ${type}.`);
+  }
 }
 
 async function reconcileRecordingState(type, reason) {
@@ -1048,7 +1054,7 @@ async function addScreenshotToChat(data) {
 }
 
 // Reset chat
-function resetChat() {
+function clearChat() {
   scheduleConversationSave();
   activeConversationId = null;
   chatHistory.innerHTML = "";
@@ -1063,6 +1069,31 @@ function resetChat() {
     }
   }
   updateNullStateVisibility();
+}
+
+async function resetChat({ restartInput = false } = {}) {
+  if (!restartInput) {
+    clearChat();
+    return;
+  }
+
+  await queueRecordingOperation("input", async () => {
+    const shouldResumeInput =
+      isRecordingDesired("input") && isRecorderActive("input");
+
+    if (shouldResumeInput) {
+      await stopRecording("input", "chat-reset", {
+        flushBuffer: false,
+        showStatusMessage: false,
+      });
+    }
+
+    clearChat();
+
+    if (shouldResumeInput && isRecordingDesired("input")) {
+      await startRecording("input", "chat-reset", { showStatusMessage: false });
+    }
+  });
 }
 
 function updateNullStateVisibility() {

@@ -107,8 +107,14 @@ module.exports = {
   setInjectPreviousResponses: (val) => store.set("openai.injectPreviousResponses", Boolean(val)),
   getStoreOpenAIConversations: () => store.get("openai.storeOpenAIConversations") ?? false,
   setStoreOpenAIConversations: (val) => store.set("openai.storeOpenAIConversations", Boolean(val)),
-  getCodeReviewContext: () => store.get("openai.codeReviewContext") || "",
-  setCodeReviewContext: (context) => store.set("openai.codeReviewContext", String(context || "").trim().slice(0, 60000)),
+  getAdditionalContext: () => store.has("openai.additionalContext")
+    ? store.get("openai.additionalContext") || ""
+    : store.get("openai.codeReviewContext") || "",
+  setAdditionalContext: (context) => store.set("openai.additionalContext", String(context || "").trim().slice(0, 60000)),
+  getCodeReviewContext: () => store.has("openai.additionalContext")
+    ? store.get("openai.additionalContext") || ""
+    : store.get("openai.codeReviewContext") || "",
+  setCodeReviewContext: (context) => store.set("openai.additionalContext", String(context || "").trim().slice(0, 60000)),
   getCodeReviewProjectPath: () => store.get("openai.codeReviewProjectPath") || "",
   setCodeReviewProjectPath: (folderPath) => store.set("openai.codeReviewProjectPath", String(folderPath || "").trim()),
   getTranscriptionPauseMs: () => {
